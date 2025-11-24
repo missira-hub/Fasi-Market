@@ -188,34 +188,32 @@ Route::middleware(['auth:sanctum', 'isAdmin'])->prefix('admin')->group(function 
     Route::delete('/feedbacks/{id}', [FeedbackController::class, 'destroy']); // Admin can also delete
 });
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/conversations', [MessageController::class, 'index']);
-    Route::get('/conversations/{conversationId}/messages', [MessageController::class, 'show']);
-    Route::post('/messages', [MessageController::class, 'store']);
-});
 
 Route::middleware('auth:sanctum')->group(function () {
+    
     Route::get('/conversations', [ConversationController::class, 'index']);
-    Route::get('/conversations/{conversationId}/messages', [ConversationController::class, 'messages']);
-    
-    // ✅ Change this line:
-    Route::post('/conversations/{conversationId}/messages', [ConversationController::class, 'sendMessage']);
-    
-    Route::post('/conversations/start', [ConversationController::class, 'startChat']);
-    Route::post('/conversations/{conversationId}/read', [ConversationController::class, 'markAsRead']);
-    
-});
+    Route::post('/conversations/start', [ConversationController::class, 'start']);
+    Route::get('/conversations/{id}', [ConversationController::class, 'show']);
+    // routes/api.php
+    Route::post('/conversations/{conversationId}/read', [MessageController::class, 'markAsRead']);
 
-// Get or create conversation with a specific farmer
-Route::middleware('auth:sanctum')->get('/conversations/with/{farmerId}', [ConversationController::class, 'getByFarmer']);
+    // 👇 Messages
+    Route::get('/conversations/{conversation}/messages', [MessageController::class, 'index']);
+    Route::post('/messages', [MessageController::class, 'store']);
+    Route::delete('/messages/{id}', [MessageController::class, 'destroy']);
+});
+    
+
 
 Route::middleware('auth:sanctum')->post('/feedback', [FeedbackController::class, 'store']);
 
 Route::get('categories', [CategoryController::class, 'index']);
 Route::get('categories/{category}', [CategoryController::class, 'show']);
 
+
 Route::middleware('auth:sanctum')->get('/feed', [ProductController::class, 'feed']);
 // in routes/api.php
+
 Route::get('/units', function () {
     return \App\Models\Unit::all();
 });

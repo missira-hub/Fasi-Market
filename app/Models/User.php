@@ -76,12 +76,15 @@ class User extends Authenticatable
     }
 
     // --- Conversations ---
-    public function conversations()
-    {
-        return $this->belongsToMany(Conversation::class, 'conversation_user')
-                    ->withPivot('last_read_at', 'is_hidden')
-                    ->withTimestamps();
-    }
+   public function conversations()
+{
+    return $this->belongsToMany(
+        Conversation::class,
+        'conversation_participants', // match the pivot table
+        'user_id',
+        'conversation_id'
+    );
+}
 
     // --- Messages ---
     public function messages()

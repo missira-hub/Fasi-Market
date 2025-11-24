@@ -101,233 +101,189 @@
     <p>Loading...</p>
   </div>
 
-
 <!-- MESSAGES SECTION -->
 <section v-if="section === 'messages'" class="messaging-section">
   <div class="messaging-container">
-    <!-- Conversations List (Left Sidebar) -->
+    <!-- Conversations Sidebar -->
     <div class="conversation-list">
       <div class="conversation-header">
         <h3>Messages</h3>
-        <div class="search-conversations">
-          <input
-            v-model="conversationSearchQuery"
-            type="text"
-            placeholder="Search conversations..."
-            @input="searchConversations"
-          />
-        </div>
+        <input
+          v-model="conversationSearchQuery"
+          type="text"
+          placeholder="Search..."
+          class="search-box"
+        />
       </div>
-
-      <!-- Loading State -->
-      <div v-if="loadingConversations" class="loading-state">
-        <p>Loading conversations...</p>
-      </div>
-
-      <!-- Empty State - No Conversations -->
-      <div v-else-if="filteredConversations.length === 0" class="empty-state">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
-        <p>No conversations found</p>
-      </div>
-
-      <!-- Conversations List -->
-      <ul v-else class="conversations-list">
+      <div v-if="loadingConversations" class="loading">Loading conversations...</div>
+      <ul v-else class="conversation-items">
         <li
           v-for="conv in filteredConversations"
           :key="conv.id"
+          :class="['conversation', { active: currentConversation?.id === conv.id }]"
           @click="selectConversation(conv)"
-          :class="['conversation-item', { active: currentConversation?.id === conv.id }]"
         >
-          <div class="conversation-info">
-            <!-- Avatar: Get the other participant -->
-            <img
-              :src="getConversationAvatar(conv)"
-              alt="Avatar"
-              class="conversation-avatar"
-            />
-
-            <div class="conversation-details">
-              <div class="conversation-header-row">
-                <strong class="conversation-title">{{ getConversationTitle(conv) }}</strong>
-                <span class="timestamp">
-                  {{ conv.last_message?.created_at ? formatTime(conv.last_message.created_at) : '' }}
-                </span>
-              </div>
-              <p class="last-message">
-                {{ getLastMessagePreview(conv) }}
-              </p>
+          <!-- Use new helper for avatar -->
+          <img :src="getConversationAvatar(conv)" class="avatar" />
+          <div class="info">
+            <div class="top">
+              <!-- Use new helper for title -->
+              <strong>{{ getConversationTitle(conv) }}</strong>
+              <small>{{ formatTime(conv.latest_message?.created_at) }}</small>
             </div>
-
-            <!-- Unread Badge -->
-            <div v-if="conv.unread_count > 0" class="unread-indicator">
-              {{ conv.unread_count > 9 ? '9+' : conv.unread_count }}
-            </div>
+            <p class="last">{{ getLastMessagePreview(conv) }}</p>
           </div>
+          <span v-if="conv.unread_count > 0" class="badge">
+            {{ conv.unread_count > 9 ? '9+' : conv.unread_count }}
+          </span>
         </li>
       </ul>
     </div>
 
-    <!-- Chat Area (Right Side) -->
+    <!-- Chat Area -->
     <div class="chat-area">
-      <!-- Placeholder: No Conversation Selected -->
-      <div v-if="!currentConversation" class="select-conversation">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
-        <h3>Select a conversation</h3>
-        <p>Choose a conversation to start messaging</p>
+      <div v-if="!currentConversation" class="placeholder">
+        <p>Select a conversation to start messaging</p>
       </div>
-
-      <!-- Active Conversation View -->
-      <div v-else>
-        <!-- Chat Header -->
+      <div v-else class="chat-window">
+        <!-- Header -->
         <div class="chat-header">
-          <div class="header-left">
-            <img
-              :src="getConversationAvatar(currentConversation)"
-              alt="Contact"
-              class="header-avatar"
-            />
-            <div class="header-info">
-              <h4>{{ getConversationTitle(currentConversation) }}</h4>
-              <p v-if="isContactOnline" class="status">Online</p>
-              <p v-else class="status">Last seen {{ formatTime(lastSeenTime) }}</p>
-            </div>
+          <img :src="getConversationAvatar(currentConversation)" class="avatar" />
+          <div>
+            <h4>{{ getConversationTitle(currentConversation) }}</h4>
+            <small>Online</small>
           </div>
-          <div class="header-actions">
-            <button class="action-button">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-              </svg>
-            </button>
-            <button class="action-button">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <circle cx="12" cy="12" r="1"/>
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-                <path d="M12 6v6l4 2"/>
-              </svg>
-            </button>
+          <!-- Placeholder for more options icon -->
+          <div class="chat-options">
+            <!-- Add options icon SVG here -->
           </div>
         </div>
 
-        <!-- Messages Container -->
-        <div
-          class="messages-container"
-          ref="messagesContainer"
-          @scroll.passive="handleScroll"
-          style="overflow-y: auto; height: 60vh;"
-        >
-          <!-- Loading More Messages (top) -->
-          <div v-if="loadingMoreMessages" class="loading-more-messages">
-            <div class="loading-spinner"></div>
-            <p>Loading older messages...</p>
-          </div>
+        <!-- Scrollable messages area -->
+        <div class="messages-wrapper">
+          <div class="messages" ref="messagesContainer">
+            <div
+              v-for="(dateGroup, dateIndex) in groupMessagesByDateAndSender(currentConversation.messages)"
+              :key="dateIndex"
+              class="date-group"
+            >
+              <!-- Date Header -->
+              <div class="date-header">
+                <span>{{ dateGroup.formattedDate }}</span>
+              </div>
 
-          <!-- No Messages Yet -->
-          <div v-else-if="hasNoMessages" class="empty-state">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <p>No messages yet</p>
-            <small>Start the conversation</small>
-          </div>
+              <!-- Message Groups for this date -->
+              <div
+                v-for="(senderGroup, senderIndex) in dateGroup.senderGroups"
+                :key="senderIndex"
+                :class="['message-group', senderGroup.sender_id === userId ? 'sent-group' : 'received-group']"
+              >
+                <div class="avatar-container" v-if="senderGroup.sender_id !== userId">
+                  <img :src="senderGroup.avatar_url" class="avatar" />
+                </div>
+                <div class="messages-bubble">
+                  <div
+                    v-for="(msg, msgIndex) in senderGroup.messages"
+                    :key="msg.id"
+                    :class="['message', 'grouped-message', senderGroup.sender_id === userId ? 'sent' : 'received']"
+                  >
+                    <div class="bubble">
+                      <strong v-if="msgIndex === 0 && senderGroup.sender_id !== userId">
+                        {{ senderGroup.sender_name }}
+                      </strong>
+                      <div class="message-content">
+                        {{ msg.message_text || msg.message }}
+                        <!-- Display images/files if present -->
+                        <div v-if="msg.attachment_url" class="attachment-preview">
+                          <img
+                            v-if="isImage(msg.attachment_url)"
+                            :src="msg.attachment_url"
+                            alt="Attachment"
+                            class="attached-image"
+                          />
+                          <div v-else class="file-attachment">
+                            📎 {{ getFileName(msg.attachment_url) }}
+                          </div>
+                        </div>
+                      </div>
 
-        <!-- Message List -->
-  <div v-else-if="!loadingMessages" class="messages-list">
-    <!-- ✅ ADD v-for HERE with (message, index) -->
-    <div
-      v-for="(message, index) in currentConversation.messages"
-      :key="message.id"
-      class="message-wrapper"
-      :class="{
-        'sent': message.sender_id === userId.value,
-        'received': message.sender_id !== userId.value
-      }"
-    >
-      <!-- RECEIVED MESSAGE (from other person) -->
-      <div v-if="message.sender_id !== userId.value" class="received-message">
-        <!-- Show avatar only when sender changes -->
-        <img
-          v-if="shouldShowAvatar(currentConversation.messages, index)"
-          :src="message.sender_avatar || '/default-avatar.png'"
-          alt="Sender"
-          class="sender-avatar"
-        />
-        <div class="message-content">
-          <div class="message-bubble received">
-            {{ message.message }}
-            <div class="message-meta">
-              <span class="timestamp">{{ formatTime(message.created_at) }}</span>
+                      <div class="message-meta">
+                        <small class="timestamp">{{ formatTime(msg.created_at) }}</small>
+                        <span v-if="msg.sender_id === userId" class="read-status">
+                          <span v-if="msg.is_read" class="blue-ticks">✓✓</span>
+                          <span v-else class="gray-ticks">✓</span>
+                        </span>
+                      </div>
+
+                      <!-- Message options (three dots) - only on last message in group -->
+                      <div
+                        v-if="msgIndex === senderGroup.messages.length - 1"
+                        :class="['message-options', selectedMessageId === msg.id ? 'active' : '']"
+                        @click.stop="toggleMessageOptions(msg.id)"
+                      >
+                        ⋮
+                      </div>
+                      <div v-if="selectedMessageId === msg.id" class="options-menu">
+                        <button @click.stop="replyToMessage(msg)">Reply</button>
+                        <button @click.stop="forwardMessage(msg)">Forward</button>
+                        <button @click.stop="deleteMessage(msg)">Delete</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- SENT MESSAGE (by you) -->
-      <div v-else class="sent-message">
-        <div class="message-content">
-          <div class="message-bubble sent">
-            {{ message.message }}
-            <div class="message-meta">
-              <span class="timestamp">{{ formatTime(message.created_at) }}</span>
-            </div>
+        <!-- Reply indicator -->
+        <div v-if="replyMessage" class="reply-indicator">
+          <div class="reply-header">
+            <span class="reply-sender">Replying to: {{ replyMessage.sender }}</span>
+            <button @click="cancelReply" class="cancel-reply">✕</button>
           </div>
+          <div class="reply-content">{{ replyMessage.text }}</div>
         </div>
-      </div>
-    </div>
+
+        <!-- Fixed input row -->
+        <div class="input-row">
+          <div class="input-tools">
+            <button @click="openFilePicker" title="Attach file">📎</button>
+            <button @click="toggleEmojiPicker" title="Add emoji">😊</button>
+          </div>
+          <input
+            v-model="newMessage"
+            @keyup.enter="sendMessage"
+            placeholder="Type a message..."
+          />
+          <button @click="sendMessage" :disabled="!newMessage.trim() && !selectedFile">Send</button>
+          <input 
+            type="file" 
+            ref="fileInput" 
+            @change="handleFileSelect" 
+            style="display: none" 
+            multiple
+          />
+        </div>
+        
+
+    <!-- Emoji Picker -->
+<div v-if="showEmojiPicker" class="emoji-picker">
+  <div 
+    v-for="emoji in emojiList" 
+    :key="emoji" 
+    @click="addEmoji(emoji)" 
+    class="emoji-option"
+    :title="emoji"
+  >
+    {{ emoji }}
   </div>
-
-          <!-- Initial Loading Spinner -->
-          <div v-if="loadingMessages && !hasNoMessages" class="loading-state">
-            <p>Loading messages...</p>
-          </div>
-        </div>
-
-        <!-- Message Input -->
-        <div class="message-input">
-          <div class="input-actions">
-            <button class="emoji-button">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-                <line x1="9" y1="9" x2="9.01" y2="9"/>
-                <line x1="15" y1="9" x2="15.01" y2="9"/>
-              </svg>
-            </button>
-            <button class="attachment-button">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l9.19-9.19"/>
-              </svg>
-            </button>
-          </div>
-
-          <div class="input-wrapper">
-            <input
-              v-model="newMessage"
-              @keyup.enter="sendMessage"
-              placeholder="Type a message..."
-              @focus="markConversationAsRead"
-            />
-          </div>
-
-          <button
-            @click="sendMessage"
-            :disabled="!newMessage.trim()"
-            class="send-button"
-            :class="{ active: newMessage.trim() }"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </button>
-        </div>
+</div>
       </div>
     </div>
   </div>
 </section>
+
 
 
   <section v-if="section === 'market' && !loading" class="card-section">
@@ -441,6 +397,7 @@
 <button class="message-farmer-btn" @click="goToMessaging(product)">
   💬 Message the Farmer
 </button>
+
 
 <!-- Quantity + Unit + Add to Cart -->
 <div class="quantity-cart">
@@ -847,363 +804,517 @@ const switchSection = async (target) => {
   }
 };
 
-
-const selectedFarmer = ref(null);
-
-const shouldShowAvatar = (messages, index) => {
-  if (index === 0) return true;
-  const prev = messages[index - 1];
-  const curr = messages[index];
-  return curr.sender_id !== prev.sender_id;
-};
-// ✅ Define the function
-const openChatWith = (farmerId) => {
-  console.log('Opening chat with farmer:', farmerId);
-
-  // Example logic:
-  currentConversation.value = {
-    farmerId,
-    messages: [], // You can load from API
-    isTyping: false,
-  };
-
-  // Optional: fetch messages
-  // loadMessages(farmerId);
-};
-const goToMessaging = (product) => {
-  // ✅ Match the v-if condition: 'messages', not 'messaging'
-  section.value = 'messages';
-
-  // Set the farmer to start chat with
-  selectedFarmer.value = product.user;
-
-  // Wait for DOM update, then scroll
-  nextTick(() => {
-    const msgSection = document.querySelector('.messaging-section');
-    if (msgSection) {
-      msgSection.scrollIntoView({ behavior: 'smooth' });
-    }
-  });
-};
-watch(counter, (newVal, oldVal) => {
-  console.log(`Counter changed from ${oldVal} to ${newVal}`)
-})
-
-// --- State (keep your existing state) ---
 const conversations = ref([])
 const currentConversation = ref(null)
-const newMessage = ref('')
 const conversationSearchQuery = ref('')
+const newMessage = ref('')
+const userId = ref(window.currentUserId || 1)
+const userAvatar = ref(window.currentUserAvatar || null)
 const loadingConversations = ref(false)
 const loadingMessages = ref(false)
-
-// Assume you have userId from auth (replace with real value if available)
-const userId = ref(window.currentUserId || 1);
-
-// ✅ ADD: Ref for messages container to control scrolling
 const messagesContainer = ref(null)
+const showEmojiPicker = ref(false)
+const selectedFile = ref(null)
+const replyMessage = ref(null)
 
-// --- Computed Properties (keep existing) ---
+
+
+// Emoji list
+const emojiList = ref(['😀', '😂', '😍', '😎', '😊', '🥰', '😘', '😗', '😙', '😚', '🙂', '🤗', '🤩', '🤔', '🤨', '😐', '😑', '😶', '🙄', '😏', 
+  '😣', '😥', '😮', '🤐', '😯', '😪', '😫', '😴', '😌', '😛', '😜', '😝', '🤤', '😒', '😓', '😔', '😕', '🙃', '🤑', '😲', 
+  '☹️', '🙁', '😖', '😞', '😟', '😤', '😢', '😭', '😦', '😧', '😨', '😩', '😬', '😰', '😱', '😳', '🤪', '😵', '😡', '😠', 
+  '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '☝️', '✋', '🤚', ' Nolan', '🖖', '👋', '🤙', '💪', 
+  '❤️', '🧡', '💛', '💚', '💙', '-purple', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', 
+  '🔥', '✨', '⭐', '🌟', '💫', '💥', '💦', '💨', '💫', '💯', '💢', '💥', '💫', '💦', '💨', '💫', '💯', '💢', '💥', '💫'])
+
+
+// --- Computed
 const filteredConversations = computed(() => {
-  const query = conversationSearchQuery.value.trim().toLowerCase()
-  if (!query) return conversations.value
-
-  return conversations.value.filter((conv) => {
-    const title = getConversationTitle(conv).toLowerCase()
-    return title.includes(query)
-  })
+  const q = conversationSearchQuery.value.toLowerCase()
+  return conversations.value.filter(c =>
+    getConversationTitle(c).toLowerCase().includes(q)
+  )
 })
 
-const hasNoMessages = computed(() => {
-  const conv = currentConversation.value;
-  if (!conv) return true;
-  const messages = conv.messages;
-  return !messages || !Array.isArray(messages) || messages.length === 0;
-});
 
-// --- Helper Methods (keep existing) ---
-const showSenderInfo = (message) => {
-  return message.sender_id !== userId.value;
-};
 
-const getMessageSenderName = (message) => {
-  return message.sender_name || 'Unknown User';
-};
+function getAvatarUrl(userId, name) {
+  const colors = ['0ea5e9', '10b981', 'f59e0b', 'ef4444', '8b5cf6', 'ec4899', 'f97316', '6366f1']
+  const hash = userId.toString().split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0)
+    return a & a
+  }, 0)
+  const color = colors[Math.abs(hash) % colors.length]
 
-// ✅ ADD: Scrolling utility functions
-const scrollToBottom = (smooth = true) => {
-  nextTick(() => {
-    const container = messagesContainer.value || document.querySelector('.messages-container');
-    if (container) {
-      if (smooth) {
-        container.scrollTo({
-          top: container.scrollHeight,
-          behavior: 'smooth'
-        });
-      } else {
-        container.scrollTop = container.scrollHeight;
-      }
-    }
-  });
-};
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(getInitials(name))}&background=${color}&color=fff&size=128`
+}
 
-const isScrolledToBottom = () => {
-  const container = messagesContainer.value || document.querySelector('.messages-container');
-  if (!container) return true;
+
+
+function getSenderAvatar(message) {
+  // First try to get avatar from message sender if available
+  if (message.sender_avatar_url) return message.sender_avatar_url
+  if (message.sender?.name) return getAvatarUrl(message.sender_id, message.sender.name)
   
-  const threshold = 50; // pixels from bottom
-  return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
-};
-
-// ✅ UPDATED: selectConversation with proper scrolling
-const selectConversation = async (conversation) => {
-  console.log('Selecting conversation:', conversation);
-  currentConversation.value = { ...conversation, messages: [] };
-  loadingMessages.value = true;
-
-  try {
-    const token = localStorage.getItem('token');
-    if (!token) throw new Error('No auth token');
-
-    const res = await axios.get(`/api/conversations/${conversation.id}/messages`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    console.log('Fetched messages:', res.data);
-
-    currentConversation.value.messages = Array.isArray(res.data) ? res.data : [];
-  } catch (err) {
-    console.error('Error loading messages:', err);
-    currentConversation.value.messages = [];
-  } finally {
-    loadingMessages.value = false;
-    
-    // ✅ IMPROVED: Scroll to bottom after messages load
-    await nextTick();
-    scrollToBottom(false); // No smooth scroll on initial load for better UX
+  // Fallback to conversation participant avatar
+  const conv = currentConversation.value
+  if (conv?.participants) {
+    const participant = conv.participants.find(p => p.id === message.sender_id)
+    if (participant?.avatar_url) {
+      return participant.avatar_url
+    }
   }
-};
+  
+  // Fallback to conversation avatar
+  return getConversationAvatar(conv)
+}
 
-// --- Load Conversations (keep existing) ---
+function getInitials(name) {
+  if (!name) return 'U'
+  const names = name.split(' ')
+  const first = names[0]?.charAt(0) || ''
+  const last = names.length > 1 ? names[names.length - 1]?.charAt(0) || '' : ''
+  return (first + last).toUpperCase()
+}
+const getConversationTitle = (conv) => conv.chat_name || 'Unknown User'
+
+
+function getConversationAvatar(conv) {
+  if (!conv || !conv.participants || conv.participants.length === 0) {
+    return getAvatarUrl("0", "User");
+  }
+
+  const myId = Number(userId.value);
+
+  let others;
+
+  if (conv.participants.length === 1) {
+    // Only one person in conversation → that’s the other user
+    others = conv.participants;
+  } else {
+    // Remove myself
+    others = conv.participants.filter(p => Number(p.id) !== myId);
+  }
+
+  const other = others[0];
+
+  if (!other) {
+    return getAvatarUrl(conv.id, conv.chat_name || "User");
+  }
+
+  if (other.avatar_url) return other.avatar_url;
+
+  return getAvatarUrl(other.id, other.name);
+}
+
+
+
+
+
+// Function to group messages by date and sender
+function groupMessagesByDateAndSender(messages) {
+  if (!messages || messages.length === 0) return []
+  
+  const grouped = []
+  let currentDateGroup = null
+  let currentSenderGroup = null
+  
+  // Sort messages by timestamp
+  const sortedMessages = [...messages].sort((a, b) => 
+    new Date(a.created_at) - new Date(b.created_at)
+  )
+  
+  for (let i = 0; i < sortedMessages.length; i++) {
+    const currentMessage = sortedMessages[i]
+    const messageDate = new Date(currentMessage.created_at).toDateString()
+    
+    // Check if we need a new date group
+    const isNewDate = !currentDateGroup || currentDateGroup.date !== messageDate
+    
+    if (isNewDate) {
+      // Start new date group
+      currentDateGroup = {
+        date: messageDate,
+        formattedDate: formatDateHeader(messageDate),
+        senderGroups: []
+      }
+      grouped.push(currentDateGroup)
+      currentSenderGroup = null
+    }
+    
+    // Check if we need a new sender group within the date
+    const previousMessage = i > 0 ? sortedMessages[i - 1] : null
+    const shouldGroupWithPrevious = previousMessage && 
+                                   currentMessage.sender_id === previousMessage.sender_id &&
+                                   new Date(currentMessage.created_at).getTime() - new Date(previousMessage.created_at).getTime() < 5 * 60 * 1000
+    
+    if (!shouldGroupWithPrevious || !currentSenderGroup) {
+      // Start new sender group
+      currentSenderGroup = {
+        sender_id: currentMessage.sender_id,
+        sender_name: currentMessage.sender?.name || getConversationTitle(currentConversation.value),
+        avatar_url: getSenderAvatar(currentMessage),
+        messages: [currentMessage]
+      }
+      currentDateGroup.senderGroups.push(currentSenderGroup)
+    } else {
+      // Add to existing sender group
+      currentSenderGroup.messages.push(currentMessage)
+    }
+  }
+  
+  return grouped
+}
+
+
+// Helper function to format date header
+function formatDateHeader(dateString) {
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  
+  const messageDate = new Date(dateString)
+  
+  if (messageDate.toDateString() === today.toDateString()) {
+    return 'Today'
+  } else if (messageDate.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday'
+  } else {
+    // Format as "Monday, November 21"
+    return new Date(dateString).toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric'
+    })
+  }
+}
+
+
+
+/* Enhanced message functions */
+function toggleMessageOptions(messageId) {
+  selectedMessageId.value = selectedMessageId.value === messageId ? null : messageId
+}
+
+function replyToMessage(message) {
+  // Get the sender name from the conversation participants
+  const conv = currentConversation.value
+  let senderName = getConversationTitle(conv)
+  
+  // Try to get the actual sender name from the message
+  if (message.sender?.name) {
+    senderName = message.sender.name
+  } else if (conv?.participants) {
+    const participant = conv.participants.find(p => p.id === message.sender_id)
+    if (participant?.name) {
+      senderName = participant.name
+    }
+  }
+  
+  // Set the reply message to show above input
+  replyMessage.value = {
+    text: message.message_text || message.message,
+    sender: senderName
+  }
+  selectedMessageId.value = null
+  // Focus on input after setting reply
+  nextTick(() => {
+    const input = document.querySelector('.input-row input')
+    if (input) input.focus()
+  })
+}
+
+function cancelReply() {
+  replyMessage.value = null
+}
+
+function forwardMessage(message) {
+  alert(`Forwarding: ${message.message_text || message.message}`)
+  selectedMessageId.value = null
+}
+
+
+function deleteMessage(message) {
+  // ✅ Check if message belongs to current user
+  const currentUserId = authStore.user?.id
+ 
+
+  // ✅ Use your custom confirmation (not browser confirm)
+  showConfirm('Are you sure you want to delete this message?', async () => {
+    try {
+      // ✅ Delete from backend
+      await axios.delete(`/api/messages/${message.id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      })
+
+      // ✅ Delete from frontend
+      currentConversation.value.messages = currentConversation.value.messages.filter(
+        msg => msg.id !== message.id
+      )
+
+      // ✅ Refresh conversations list (updates latest message, unread count)
+      await loadConversations()
+
+      selectedMessageId.value = null
+      showStatus('Message deleted successfully', 'success')
+    } catch (e) {
+      console.error('Delete failed:', e)
+      showStatus('Failed to delete message', 'error')
+    }
+  })
+}
+
+
+function openFilePicker() {
+  fileInput.value.click()
+}
+
+function handleFileSelect(event) {
+  const files = event.target.files
+  if (files.length > 0) {
+    selectedFile.value = files[0]
+    // You can implement file upload logic here
+  }
+}
+
+// Add this function to handle clicks outside the options menu
+function handleClickOutside(event) {
+    const replyIndicator = event.target.closest('.reply-indicator')
+  const optionsMenu = event.target.closest('.options-menu')
+  const optionsButton = event.target.closest('.message-options')
+  
+  // Only close if the click is outside both the menu and the button
+  if (!optionsMenu && !optionsButton) {
+    selectedMessageId.value = null
+  }
+}
+
+
+
+// Update onMounted
+onMounted(() => {
+  loadConversations()
+  document.addEventListener('click', handleClickOutside)
+})
+
+
+
+// Add onUnmounted to clean up
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
+
+function toggleEmojiPicker() {
+  showEmojiPicker.value = !showEmojiPicker.value
+}
+
+function addEmoji(emoji) {
+  newMessage.value += emoji
+  showEmojiPicker.value = false
+}
+
+function isImage(url) {
+  return /\.(jpeg|jpg|gif|png|webp)$/i.test(url)
+}
+
+function getFileName(url) {
+  return url.split('/').pop()
+}
+
+/* Group messages by sender for display */
+function groupMessagesBySender(messages) {
+  if (!messages || messages.length === 0) return []
+  
+  const grouped = []
+  let currentGroup = null
+  
+  for (let i = 0; i < messages.length; i++) {
+    const currentMessage = messages[i]
+    const previousMessage = i > 0 ? messages[i - 1] : null
+    
+    // Check if this message should be grouped with the previous one
+    const shouldGroup = previousMessage && 
+                       currentMessage.sender_id === previousMessage.sender_id &&
+                       // Group if messages are within 5 minutes of each other
+                       new Date(currentMessage.created_at).getTime() - new Date(previousMessage.created_at).getTime() < 5 * 60 * 1000
+    
+    if (shouldGroup && currentGroup) {
+      // Add to existing group
+      currentGroup.messages.push(currentMessage)
+    } else {
+      // Start new group
+      currentGroup = {
+        sender_id: currentMessage.sender_id,
+        sender_name: currentMessage.sender?.name || getConversationTitle(currentConversation.value),
+        avatar_url: getSenderAvatar(currentMessage),
+        messages: [currentMessage]
+      }
+      grouped.push(currentGroup)
+    }
+  }
+  
+  return grouped
+}
+
+const getLastMessagePreview = (conv) => {
+  const text =
+    conv.latest_message?.message_text ||
+    conv.latest_message?.message ||
+    ''
+  return text.length > 40 ? text.slice(0, 40) + '...' : text
+}
+
+const formatTime = (ts) => {
+  if (!ts) return ''
+  const d = new Date(ts)
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+// --- API Calls
 const loadConversations = async () => {
   loadingConversations.value = true
   try {
     const token = localStorage.getItem('token')
-    if (!token) throw new Error('No auth token')
-
     const res = await axios.get('/api/conversations', {
       headers: { Authorization: `Bearer ${token}` }
     })
-
-    console.log('Conversations API Response:', res.data)
-
-    conversations.value = Array.isArray(res.data) ? res.data : []
-  } catch (err) {
-    console.error('Error loading conversations:', err)
-    console.error('Error response:', err.response?.data)
-    conversations.value = []
+    conversations.value = res.data
+  } catch (e) {
+    console.error('Failed to load conversations', e)
   } finally {
     loadingConversations.value = false
   }
 }
 
-// ✅ UPDATED: sendMessage with improved scrolling logic
-const sendMessage = async () => {
-  if (!newMessage.value.trim() || !currentConversation.value) return
-
-  const messageText = newMessage.value.trim()
-  const tempId = Date.now()
-  
-  // Check if user was at bottom before sending
-  const wasAtBottom = isScrolledToBottom();
-
-  // ✅ Get token
-  const token = localStorage.getItem('token')
-  if (!token) {
-    console.error('No auth token found')
-    return
-  }
-
-  const tempMessage = {
-    id: tempId,
-    message: messageText,
-    sender_id: userId.value,
-    sender_name: 'You', // Add sender name for consistency
-    created_at: new Date().toISOString(),
-    status: 'sending' // Add status for better UX
-  }
-
-  // ✅ Optimistic update
-  currentConversation.value.messages.push(tempMessage)
-  newMessage.value = ''
-
- const scrollToBottom = (smooth = true) => {
-  nextTick(() => {
-    const container = messagesContainer.value;
-    if (container) {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto'
-      });
-    }
-  });
-};
-
+const selectConversation = async (conv) => {
+  currentConversation.value = { ...conv, messages: [] }
+  loadingMessages.value = true
 
   try {
+    const token = localStorage.getItem('token')
+    const res = await axios.get(`/api/conversations/${conv.id}/messages`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+
+    const messages = res.data
+    currentConversation.value.messages = messages
+
+    // Calculate read/unread counts
+    const readCount = messages.filter(msg => msg.read).length
+    const unreadCount = messages.length - readCount
+
+    currentConversation.value.readCount = readCount
+    currentConversation.value.unreadCount = unreadCount
+
+    await nextTick()
+    smoothScrollToBottom()
+  } catch (e) {
+    console.error('Failed to load messages', e)
+  } finally {
+    loadingMessages.value = false
+  }
+}
+
+const sendMessage = async () => {
+  if ((!newMessage.value.trim() && !selectedFile.value) || !currentConversation.value) return
+  
+  const tempMessageText = newMessage.value.trim()
+  const msg = {
+    id: Date.now(),
+    message_text: tempMessageText,
+    sender_id: userId.value,
+    created_at: new Date().toISOString(),
+    attachment_url: selectedFile.value ? URL.createObjectURL(selectedFile.value) : null
+  }
+  
+  currentConversation.value.messages.push(msg)
+  console.log('👉 Sending message from:', msg.sender_id)
+  console.log('👉 Current user ID:', userId.value)
+  console.log('👉 Are they equal?', msg.sender_id === userId.value)
+  console.log('👉 Message object:', msg)
+  
+  // Reset input
+  newMessage.value = ''
+  selectedFile.value = null
+  
+  try {
+    const token = localStorage.getItem('token')
+    const formData = new FormData()
+    formData.append('conversation_id', currentConversation.value.id)
+    formData.append('message_text', tempMessageText)
+    
+    if (selectedFile.value) {
+      formData.append('attachment', selectedFile.value)
+    }
+    
     const res = await axios.post(
-      `/api/conversations/${currentConversation.value.id}/send`,
-      { message: messageText },
-      { headers: { Authorization: `Bearer ${token}` } }
+      '/api/messages',
+      formData,
+      { 
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        } 
+      }
     )
-
-    // ✅ Replace temp message with real one
-    const idx = currentConversation.value.messages.findIndex(m => m.id === tempId)
-    if (idx !== -1) {
-      // Preserve the position and update with server response
-      currentConversation.value.messages[idx] = {
-        ...res.data,
-        status: 'sent'
-      };
-    }
-
-    // ✅ Refresh conversation list (to update last message)
+    Object.assign(msg, res.data)
     await loadConversations()
-    
-    // ✅ Ensure we stay scrolled if we were at bottom
-    if (wasAtBottom) {
-      scrollToBottom(true);
-    }
-    
-  } catch (err) {
-    console.error('Failed to send message:', err)
-    
-    // ✅ IMPROVED: Mark message as failed with retry option
-    const idx = currentConversation.value.messages.findIndex(m => m.id === tempId)
-    if (idx !== -1) {
-      currentConversation.value.messages[idx].status = 'failed'
-    }
+    scrollToBottom()
+  } catch (e) {
+    console.error('Failed to send message', e)
   }
 }
 
-// ✅ ADD: Mark conversation as read when focused
-const markConversationAsRead = () => {
-  if (!currentConversation.value) return;
-  
-  // You can implement API call to mark as read here
-  // Example:
-  // const token = localStorage.getItem('token');
-  // axios.patch(`/api/conversations/${currentConversation.value.id}/read`, {}, {
-  //   headers: { Authorization: `Bearer ${token}` }
-  // }).catch(err => console.error('Failed to mark as read:', err));
-  
-  // Update local state
-  if (currentConversation.value.unread_count > 0) {
-    currentConversation.value.unread_count = 0;
+// --- Smooth Scrolling Logic
+const smoothScrollToBottom = async () => {
+  await nextTick()
+  const el = messagesContainer.value
+  if (el) {
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: 'smooth'
+    })
   }
-};
-
-// ✅ ADD: Handle received messages (for real-time updates)
-const handleNewMessage = (message) => {
-  if (!currentConversation.value || message.conversation_id !== currentConversation.value.id) {
-    // Update conversation list for other conversations
-    loadConversations();
-    return;
-  }
-
-  // Check if user was at bottom before new message
-  const wasAtBottom = isScrolledToBottom();
-  
-  // Add message to current conversation
-  currentConversation.value.messages.push(message);
-  
-  // Only auto-scroll if user was already at bottom (good UX practice)
-  if (wasAtBottom) {
-    scrollToBottom(true);
-  }
-};
-
-// ✅ ADD: Auto-scroll on window resize to maintain position
-const handleResize = () => {
-  // Debounce resize events
-  clearTimeout(handleResize.timeoutId);
-  handleResize.timeoutId = setTimeout(() => {
-    if (isScrolledToBottom()) {
-      scrollToBottom(false);
-    }
-  }, 100);
-};
-
-
-// --- Helper Functions (keep existing) ---
-const formatTime = (dateString) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now - date
-  const diffMins = Math.round(diffMs / 60000)
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m`
-  const diffHours = Math.round(diffMs / 3600000)
-  if (diffHours < 24) return `${diffHours}h`
-  const diffDays = Math.round(diffMs / 86400000)
-  if (diffDays < 7) return `${diffDays}d`
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-const getConversationTitle = (conversation) => {
-  if (conversation.with_farmer) return conversation.with_farmer.name
-  if (conversation.participants && conversation.participants.length > 0) {
-    return conversation.participants
-      .filter(p => p.id !== userId.value)
-      .map(p => p.name)
-      .join(', ')
-  }
-  return `Conversation #${conversation.id}`
-}
-
-const getLastMessagePreview = (conversation) => {
-  const lastMsg = conversation.last_message
-  if (!lastMsg || !lastMsg.message) return 'No messages yet'
-  const text = lastMsg.message
-  return text.length > 50 ? text.substring(0, 50) + '...' : text
-}
-
-// ✅ UPDATED: Mount Hook with event listeners
-onMounted(() => {
-  if (section.value === 'messages') {
-    loadConversations()
-  }
-  
-  // Add resize listener for better scrolling behavior
-  window.addEventListener('resize', handleResize);
-})
-
-// ✅ ADD: Cleanup on unmount
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize);
-  clearTimeout(handleResize.timeoutId);
-})
-
-// ✅ ADD: Watch for new messages in current conversation
+// Watch for new messages dynamically
 watch(
   () => currentConversation.value?.messages?.length,
-  (newLength, oldLength) => {
-    // Only auto-scroll if messages were added (not initial load)
-    if (oldLength && newLength > oldLength) {
-      const wasAtBottom = isScrolledToBottom();
-      if (wasAtBottom) {
-        nextTick(() => scrollToBottom(true));
+  () => smoothScrollToBottom()
+)
+
+const groupedMessages = computed(() => {
+  if (!currentConversation.value?.messages?.length) return []
+
+  const groups = []
+  let lastSender = null
+  let currentGroup = null
+
+  for (const msg of currentConversation.value.messages) {
+    if (msg.sender_id !== lastSender) {
+      if (currentGroup) groups.push(currentGroup)
+      currentGroup = {
+        sender_id: msg.sender_id,
+        sender: msg.sender,
+        messages: []
       }
+      lastSender = msg.sender_id
     }
+    currentGroup.messages.push(msg)
   }
-);
-// ✅ ADD: getConversationAvatar — This was missing!
-const getConversationAvatar = (conversation) => {
-  // Use `users` (from your Conversation model's relationship)
-  const otherUser = conversation.users?.find(u => u.id !== userId.value);
-  return otherUser?.avatar_url || '/default-avatar.png';
-};
+
+  if (currentGroup) groups.push(currentGroup)
+  return groups
+})
+
+// --- Lifecycle
+onMounted(() => {
+  loadConversations()
+})
+
+// ✅ Alias for use in template (must come AFTER declaration)
+const getAvatar = getConversationAvatar
+
 
 
 const paymentError = ref(null);
@@ -1350,16 +1461,10 @@ const closeProfile = () => {
 
 const onProfileUpdated = (updatedUser) => {
   userProfile.value = updatedUser
-  profilePictureUrl.value = updatedUser.avatar_url || defaultAvatar
+  profilePictureUrl.value = updatedUser.avatar || defaultAvatar
   closeProfile()
 }
 
-// Close dropdown when clicking outside
-const handleClickOutside = (event) => {
-  if (!event.target.closest('.settings-wrapper')) {
-    closeSettings()
-  }
-}
 
 
 
@@ -3172,732 +3277,662 @@ body.payment-active {
     }
 }
 
-.messaging-section {
-  display: flex;
-  height: 600px; /* or your desired height */
-  background-color: #b0c9d6; /* the blue background behind the white container */
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
 
-.messaging-container {
-  display: flex;
-  width: 960px;
-  height: 480px;
-  background-color: white;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-/* Left sidebar */
-.conversation-list {
-  width: 320px;
-  border-right: 1px solid #ddd;
-  display: flex;
-  flex-direction: column;
-}
-
-.conversation-header {
-  padding: 12px;
-  border-bottom: 1px solid #ddd;
-  font-weight: 600;
-  font-size: 18px;
-}
-
-.search-conversations input {
-  width: 100%;
-  padding: 6px 8px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 2px;
-}
-
-.conversations-list {
+/* Disable main scroll when in messages */
+.main-view {
   overflow-y: auto;
-  flex-grow: 1;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.conversation-item {
-  display: flex;
-  padding: 10px 12px;
-  cursor: pointer;
-  border-left: 4px solid transparent;
-  transition: background-color 0.2s, border-color 0.2s;
-  align-items: center;
-}
-
-.conversation-item.active {
-  background-color: #2a7fff;
-  color: white;
-  border-left-color: #1565d8;
-}
-
-.conversation-item:hover {
-  background-color: #e5f1ff;
-}
-
-.avatar-wrapper {
-  position: relative;
-  margin-right: 10px;
-}
-
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.unread-badge {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  background: #1de9b6;
-  color: #222;
-  font-weight: 600;
-  font-size: 10px;
-  padding: 2px 5px;
-  border-radius: 12px;
-}
-
-/* Conversation details */
-.conversation-details {
   flex: 1;
-  font-size: 13px;
+  padding: 2rem;
+  padding-bottom: 5rem;
 }
 
-.conversation-header-row {
-  display: flex;
-  justify-content: space-between;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.timestamp {
-  color: #ccc;
-  font-size: 11px;
-}
-
-.last-message {
-  color: #666;
-  white-space: nowrap;
+.main-view.messages-active {
   overflow: hidden;
-  text-overflow: ellipsis;
 }
-
-/* Chat area */
-.chat-area {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-  background: #fefefe;
-}
-
-.chat-header {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #ddd;
-  align-items: center;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-}
-
-.header-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  margin-right: 10px;
-  object-fit: cover;
-}
-
-.header-info h4 {
-  margin: 0;
-  font-weight: 700;
-}
-
-.status {
-  font-size: 12px;
-  color: #aaa;
-  margin-top: 2px;
-}
-
-.header-actions button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 6px;
-  margin-left: 8px;
-  border-radius: 4px;
-  transition: background-color 0.15s;
-}
-
-.header-actions button:hover {
-  background-color: #e5e5e5;
-}
-
-/* Messages container */
-.messages-container {
-  flex-grow: 1;
-  padding: 10px 20px;
-  overflow-y: auto;
-  background: #f7f9fc;
-}
-
-/* Message groups */
-.message-group {
-  margin-bottom: 16px;
-  max-width: 65%;
-}
-
-.message-group.current-user {
-  margin-left: auto;
-  max-width: 65%;
-  text-align: right;
-}
-
-.message-sender {
-  display: flex;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.sender-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  margin-right: 6px;
-  object-fit: cover;
-}
-
-.sender-name {
-  font-weight: 600;
-  font-size: 13px;
-  color: #555;
-}
-
-.message-bubble {
-  background-color: #ddd;
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.3;
-  position: relative;
-  display: inline-block;
-}
-
-.message-bubble.my-message {
-  background-color: #a9ccff;
-  color: #0a3c91;
-}
-
-.message-content p {
-  margin: 0;
-}
-
-.message-meta {
-  margin-top: 6px;
-  display: flex;
-  justify-content: flex-end;
-  font-size: 10px;
-  color: #999;
-  align-items: center;
-}
-
-.timestamp {
-  margin-left: 6px;
-}
-
-/* Input area */
-.message-input {
-  display: flex;
-  align-items: center;
-  border-top: 1px solid #ddd;
-  padding: 8px 16px;
-  background: white;
-}
-
-.input-actions button {
-  background: none;
-  border: none;
-  margin-right: 8px;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
-}
-
-.input-wrapper {
-  flex-grow: 1;
-}
-
-.message-input input {
-  width: 100%;
-  padding: 8px 12px;
-  font-size: 14px;
-  border: 1px solid #ddd;
-  border-radius: 20px;
-}
-
-.send-button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  margin-left: 8px;
-  padding: 6px;
-  border-radius: 4px;
-  transition: color 0.3s;
-  color: #aaa;
-}
-
-.send-button.active {
-  color: #2a7fff;
-}
-
-
+/* MESSAGING LAYOUT - Light Theme */
 .messaging-section {
+  position: fixed;
+    width: 100%;
+  top: 58px; /* height of header */
+  bottom: 80px; /* height of bottom nav */
+  left: 0;
+  right: 0;
+  background: #f9fafb;
   display: flex;
-  height: 100vh;
-  background: rgba(30, 41, 59, 0.95); /* ✅ changed background */
   justify-content: center;
   align-items: center;
-  padding: 0; /* removed extra padding to fill screen */
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  margin: 0;
+  overflow: hidden;
+  z-index: 900;
+  padding: 10px;
 }
 
 .messaging-container {
   display: flex;
-  width: 100%; /* ✅ full width */
-  height: 680px; /* Fixed height (or use 80vh) */
-  background-color: white;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  border-radius: 0; /* removed rounding for full-screen look */
+  width: 100%;
+  height: 85vh;
+  background: #ffffff;
+  border-radius: 16px;
   overflow: hidden;
-  position:fixed;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  margin-top: 60px;
 }
 
-/* Left sidebar */
+/* LEFT SIDEBAR */
 .conversation-list {
-  width: 350px;
-  border-right: 1px solid #e6e9f0;
+  width: 25%;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
-  background-color: #f8fafc;
+  overflow: hidden;
+  color: #1f2937;
 }
 
 .conversation-header {
-  padding: 16px;
-  border-bottom: 1px solid #e6e9f0;
+  padding: 18px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.conversation-header h3 {
+  margin: 0;
+  font-size: 1rem;
   font-weight: 600;
-  font-size: 18px;
-  color: #2d3748;
-  background-color: white;
+  color: #111827;
 }
 
-.search-conversations {
-  padding: 12px 16px;
-  background-color: white;
-}
-
-.search-conversations input {
+.search-box {
   width: 100%;
-  padding: 10px 12px;
-  font-size: 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background-color: #f8fafc;
-  transition: all 0.3s;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
 }
 
-.search-conversations input:focus {
+.search-box::placeholder {
+  color: #9ca3af;
+}
+
+.search-box:focus {
   outline: none;
-  border-color: #a0aec0;
-  background-color: white;
-  box-shadow: 0 0 0 3px rgba(118, 169, 250, 0.2);
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
 }
 
-
-.conversations-list {
-  overflow-y: auto;
-  flex-grow: 1;
+.conversation-items {
+  list-style: none;
   margin: 0;
   padding: 0;
-  list-style: none;
+  overflow-y: auto;
+  flex: 1;
 }
 
-.conversation-item {
+.conversation {
   display: flex;
-  padding: 14px 16px;
-  cursor: pointer;
-  border-left: 4px solid transparent;
-  transition: all 0.3s ease;
   align-items: center;
-  background-color: white;
-  margin: 4px 8px;
-  border-radius: 8px;
-}
-
-.conversation-item.active {
-  background: linear-gradient(90deg, #ebf4ff 0%, #e3eff9 100%);
-  color: #2d3748;
-  border-left-color: #4299e1;
-}
-
-.conversation-item:hover {
-  background-color: #f0f5ff;
-}
-
-.avatar-wrapper {
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  transition: all 0.2s ease;
   position: relative;
-  margin-right: 12px;
+}
+
+.conversation:hover {
+  background: #f9fafb;
+}
+
+.conversation.active {
+  background: #f0fdf4;
+  border-left: 3px solid #22c55e;
 }
 
 .avatar {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #e2e8f0;
+  border: 1px solid #e5e7eb;
 }
 
-.unread-badge {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  background: #48bb78;
-  color: white;
-  font-weight: 600;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 12px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* Conversation details */
-.conversation-details {
+.info {
   flex: 1;
-  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.conversation-header-row {
+.info .top {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.info .top strong {
+  font-size: 0.95rem;
   font-weight: 600;
-  margin-bottom: 4px;
-  color: #2d3748;
-}
-
-.timestamp {
-  color: #a0aec0;
-  font-size: 12px;
-}
-
-.last-message {
-  color: #718096;
+  color: #111827;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Chat area */
+.info .top small {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.last {
+  font-size: 0.8rem;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.badge {
+  background: #22c55e;
+  color: white;
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* CHAT AREA */
 .chat-area {
-  flex-grow: 1;
+  width: 80%;
   display: flex;
   flex-direction: column;
-  background: #f7fafc;
-  
+  background: #ffffff;
+  height: 100%;
+  position: relative;
+  color: #111827;
 }
 
 .chat-header {
   display: flex;
-  justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e6e9f0;
   align-items: center;
-  background-color: white;
+  gap: 14px;
+  background: #ffffff;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f3f4f6;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-}
-
-.header-avatar {
-  width: 40px;
-  height: 40px;
+.chat-header .avatar {
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
-  margin-right: 12px;
-  object-fit: cover;
-  border: 2px solid #e2e8f0;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.header-info h4 {
+.chat-header h4 {
+  color: #111827;
   margin: 0;
-  font-weight: 700;
-  color: #2d3748;
+  font-size: 1rem;
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.status {
-  font-size: 13px;
-  color: #48bb78;
-  margin-top: 2px;
-  display: flex;
-  align-items: center;
+.chat-header small {
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
-.status::before {
-  content: "";
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #48bb78;
-  margin-right: 6px;
-}
-
-.header-actions button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  margin-left: 8px;
-  border-radius: 8px;
-  transition: all 0.3s;
-  color: #718096;
-}
-
-.header-actions button:hover {
-  background-color: #edf2f7;
-  color: #2d3748;
-}
-/* Container holding all messages */
-.messages-container {
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  background: #ffffff;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  overflow-y: auto;
-  padding: 1rem;
-  height: 60vh;
+  gap: 12px;
+  scroll-behavior: smooth;
+  max-height: calc(100vh - 300px);
+  position: relative;
+  z-index: 5;
 }
 
-/* Each message wrapper */
-.message-wrapper {
-  display: flex;
+/* DATE HEADER */
+.date-group {
+  margin-bottom: 20px;
+}
+
+.date-header {
+  text-align: center;
+  margin: 18px 0 12px;
+  position: relative;
   width: 100%;
-  height:100;
 }
 
-/* Sent message (align right) */
-.message-wrapper.sent {
-  justify-content: flex-end; /* pushes content to the right */
-  
+.date-header::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(to right, transparent, #e5e7eb, transparent);
+  z-index: 1;
 }
-.message-wrapper.sent .message-bubble {
-  background-color: #4f46e5;
-  color: white;
-  padding: -3rem 0.8rem;        /* smaller padding */
-  max-width: 100%;
+
+.date-header span {
+  background-color: #f9fafb;
+  padding: 8px 20px;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-weight: 500;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  border: 1px solid #f3f4f6;
+}
+
+/* MESSAGE STYLING */
+.message-group {
+  display: flex;
+  margin-bottom: 8px;
+  align-items: flex-start;
+}
+
+.sent-group {
+  justify-content: flex-end;
+}
+
+.received-group {
+  justify-content: flex-start;
+}
+
+.avatar-container {
+  margin-right: 10px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  margin-top: 4px;
+}
+
+.messages-bubble {
+  display: flex;
+  flex-direction: column;
+  max-width: 70%;
+  gap: 4px;
+}
+
+.grouped-message {
+  margin-bottom: 2px;
+}
+
+.grouped-message:last-child {
+  margin-bottom: 0;
+}
+
+.message.sent .bubble {
+  background: #22c55e;
+  color: #ffffff;
+  border-radius: 16px 16px 4px 16px;
+  padding: 12px 16px;
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.2);
+  font-size: 0.95rem;
+  line-height: 1.4;
   word-wrap: break-word;
 }
 
-
-/* Received message (align left) */
-.message-wrapper.received {
-  justify-content: flex-start; /* pushes content to the left */
-}
-
-.message-wrapper.received .message-bubble {
-  background-color: #bbc1cbff; /* received bubble color */
-  color: #0c0d10ff;
-  border-radius: 1rem 1rem 1rem 0.25rem;
-}
-
-/* Optional: spacing between avatar and bubble */
-.received-message .sender-avatar {
-  margin-right: 0.7rem;
-}
-
-
-/* Message groups */
-.message-group {
-  margin-bottom: 20px;
-  max-width: 70%;
-}
-
-.message-group.current-user {
-  margin-left: auto;
-  max-width: 70%;
-  text-align: right;
-}
-
-.message-sender {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.sender-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  margin-right: 8px;
-  object-fit: cover;
-  border: 2px solid #e2e8f0;
-}
-
-.sender-name {
-  font-weight: 600;
-  font-size: 14px;
-  color: #115bdbff;
-}
-
-.message-bubble {
-  background-color: white;
+.message.received .bubble {
+  background: #f3f4f6;
+  color: #111827;
+  border-radius: 16px 16px 16px 4px;
   padding: 12px 16px;
-  border-radius: 18px;
-  font-size: 15px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  font-size: 0.95rem;
   line-height: 1.4;
-  position: relative;
-  display: inline-block;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  color: #2d3748;
-  border: 1px solid #e2e8f0;
-}
-
-.message-bubble.my-message {
-  background: linear-gradient(90deg, #4299e1 0%, #3182ce 100%);
-  color: white;
-  border: none;
-}
-
-.message-content p {
-  margin: 0;
-}
-
-.message-meta {
-  margin-top: 8px;
-  display: flex;
-  justify-content: flex-end;
-  font-size: 11px;
-  color: #a0aec0;
-  align-items: center;
-}
-
-.message-meta.my-message {
-  color: rgba(255, 255, 255, 0.7);
+  word-wrap: break-word;
 }
 
 .timestamp {
-  margin-left: 6px;
+  display: block;
+  text-align: right;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 6px;
+  font-weight: 500;
 }
 
-/* Input area */
-.message-input {
+.message.sent .timestamp {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.message.received .timestamp {
+  color: #9ca3af;
+  text-align: left;
+}
+
+.message-content {
   display: flex;
-  align-items: center;
-  border-top: 1px solid #e6e9f0;
-  padding: 12px 24px;
-  background: white;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.input-actions button {
+.attachment-preview {
+  margin-top: 8px;
+  max-width: 100%;
+}
+
+.attached-image {
+  max-width: 180px;
+  max-height: 180px;
+  border-radius: 12px;
+  object-fit: cover;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.attachment-preview {
+  margin-top: 8px;
+  max-width: 100%;
+}
+
+.attached-image {
+  max-width: 180px;
+  max-height: 180px;
+  border-radius: 12px;
+  object-fit: cover;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.file-attachment {
+  background: #1e293b;
+  color: #94a3b8;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+
+.message-options {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  color: #9ca3af;
+  z-index: 20;
   background: none;
   border: none;
-  margin-right: 12px;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 8px;
-  color: #718096;
-  transition: all 0.3s;
-}
-
-.input-actions button:hover {
-  background-color: #edf2f7;
-  color: #2d3748;
-}
-
-.input-wrapper {
-  flex-grow: 1;
-}
-
-.message-input input {
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 15px;
-  border: 1px solid #e2e8f0;
-  border-radius: 24px;
-  background-color: #f8fafc;
-  transition: all 0.3s;
-}
-
-.message-input input:focus {
-  outline: none;
-  border-color: #a0aec0;
-  background-color: white;
-  box-shadow: 0 0 0 3px rgba(118, 169, 250, 0.2);
-}
-
-.send-button {
-  background:  #f6f7f8ff ;
-  border: none;
-  cursor: pointer;
-  margin-left: 12px;
-  padding: 10px;
-  border-radius: 50%;
-  transition: all 0.3s;
-  color: blue;
-  width: 44px;
-  height: 44px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 5px rgba(16, 16, 16, 0.96);
+  border-radius: 50%;
 }
 
-.send-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(66, 153, 225, 0.3);
+.message:hover .message-options {
+  opacity: 1;
 }
 
-.send-button:disabled {
+.message-options:hover {
+  opacity: 1 !important;
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+.options-menu {
+  position: absolute;
+  top: 28px;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 140px;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+}
+
+.message-options.active + .options-menu,
+.options-menu.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  display: block !important;
+}
+
+.options-menu button {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #111827;
+  transition: background 0.2s;
+  font-weight: 500;
+}
+
+.options-menu button:hover {
+  background: #f9fafb;
+  color: #1f2937;
+}
+
+.options-menu button:first-child {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.options-menu button:last-child {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+/* Reply indicator */
+.reply-indicator {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  position: fixed;
+  bottom: 60px;
+  left: 24px;
+  right: 24px;
+  z-index: 15;
+  max-width: calc(100% - 48px);
+  margin: 0 24px 8px 24px;
+  max-height: 80px;
+  overflow: hidden;
+}
+
+.reply-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #059669;
+  font-weight: 500;
+}
+
+.reply-sender {
+  font-style: italic;
+}
+
+.cancel-reply {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: 0;
+  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cancel-reply:hover {
+  color: #111827;
+  background-color: #f3f4f6;
+}
+
+.reply-content {
+  font-size: 0.9rem;
+  color: #111827;
+  padding: 4px 0;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 2px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* INPUT ROW */
+.input-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 24px;
+  background: #ffffff;
+  border-top: 1px solid #f3f4f6;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.input-row input {
+  flex: 1;
+  padding: 14px 20px;
+  border-radius: 24px;
+  border: 1px solid #d1d5db;
+  outline: none;
+  background: #ffffff;
+  color: #111827;
+  font-size: 0.95rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.input-row input::placeholder {
+  color: #9ca3af;
+}
+
+.input-row input:focus {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.input-row button {
+  background: #22c55e;
+  color: white;
+  border: none;
+  border-radius: 24px;
+  padding: 12px 20px;
+  margin-left: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+}
+
+.input-row button:hover {
+  background: #16a34a;
+  transform: translateY(-1px);
+}
+
+.input-row button:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
-  background: #a0aec0;
-  box-shadow: none;
-  transform: none;
+  background: #d1d5db;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
+/* Emoji Picker */
+.emoji-picker {
+  position: absolute;
+  bottom: 100px;
+  left: 24px;
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 10px;
+  max-width: 240px;
+  max-height: 180px;
+  overflow-y: auto;
+  z-index: 1000;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+.emoji-option {
+  text-align: center;
+  cursor: pointer;
+  font-size: 22px;
+  padding: 6px;
+  border-radius: 12px;
+  transition: background 0.2s;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
-  border-radius: 4px;
+.emoji-option:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #a0aec0;
-}
-.send-button:disabled {
-  cursor: not-allowed;
-  color: #ccc;
+/* File Picker Button */
+.input-tools button {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 8px;
+  border-radius: 12px;
+  transition: background 0.2s;
 }
 
+.input-tools button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
 
 
 /* Title styling – moved down by top margin */
@@ -4239,6 +4274,340 @@ body.payment-active {
   padding: 1rem;
 }
 
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  /* Adjust main view padding */
+  .main-view {
+    padding: 1rem; /* Reduce padding */
+    padding-bottom: 6rem; /* Increase bottom padding to account for potentially taller nav */
+  }
+
+  /* Adjust search bar */
+  .search-bar {
+    margin: 4rem 1rem 1rem; /* Reduce top margin, add side margins */
+  }
+  .search-input-wrapper {
+    padding: 0.75rem; /* Reduce padding */
+  }
+  .search-input-wrapper input {
+    font-size: 0.9rem; /* Slightly smaller font */
+  }
+
+  /* Adjust filter buttons */
+  .filter-controls {
+    gap: 0.5rem; /* Smaller gap */
+  }
+  .filter-btn {
+    padding: 0.5rem 1rem; /* Smaller padding */
+    font-size: 0.9rem; /* Smaller font */
+  }
+
+  /* Adjust product grid */
+  .product-grid {
+    grid-template-columns: 1fr; /* Force single column on small screens */
+    gap: 1rem; /* Smaller gap */
+  }
+/* ===== RESPONSIVE MESSAGING LAYOUT ===== */
+
+/* --- Mobile View (Small Screens) --- */
+@media (max-width: 768px) {
+  .messaging-section {
+    height: calc(100vh - 60px); /* Adjust for header height */
+    margin-top: 0;
+  }
+
+  .messaging-container {
+    height: 100%;
+    border-radius: 0; /* Remove rounded corners for full-screen feel */
+    box-shadow: none; /* Remove shadow for cleaner look */
+    margin-top: 0;
+  }
+
+  /* Stack sidebar and chat area vertically */
+  .messaging-container {
+    flex-direction: column;
+  }
+
+  /* Conversation List (Sidebar) */
+  .conversation-list {
+    width: 100%; /* Full width */
+    height: 40vh; /* Take 40% of viewport height */
+    border-right: none; /* Remove right border */
+    border-bottom: 1px solid #ddd; /* Add bottom border */
+    overflow-y: auto; /* Make scrollable */
+  }
+
+  .conversation-header {
+    padding: 15px;
+    border-bottom: 3px solid #ddd;
+  }
+
+  .search-box {
+    padding: 12px 15px;
+    margin-top: 8px;
+  }
+
+  .conversation-items {
+    padding: 10px;
+  }
+
+  .conversation {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .info {
+    font-size: 0.9rem; /* Slightly smaller text */
+  }
+
+  .info .top {
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .badge {
+    font-size: 0.6rem;
+    padding: 2px 5px;
+  }
+
+  /* Chat Area */
+  .chat-area {
+    width: 100%; /* Full width */
+    height: 60vh; /* Take 60% of viewport height */
+    background: #efeae2;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Chat Header */
+  .chat-header {
+    padding: 12px 15px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .chat-header h4 {
+    font-size: 1rem; /* Smaller font */
+  }
+
+  /* Messages Area */
+  .messages {
+    max-height: calc(100vh - 220px); /* Adjust based on header + input height */
+    padding: 12px 15px;
+  }
+
+  .message {
+    max-width: 75%; /* Slightly wider bubbles for mobile */
+  }
+
+  /* Input Row */
+  .input-row {
+    padding: 12px 15px;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+  }
+
+  .input-row input {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+
+  .input-row button {
+    padding: 10px 15px;
+    font-size: 0.9rem;
+  }
+}
+
+/* --- Tablet View (Optional) --- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .messaging-container {
+    height: 80vh; /* Slightly shorter than desktop */
+  }
+
+  .conversation-list {
+    width: 25%; /* Wider sidebar for tablet */
+  }
+
+  .chat-area {
+    width: 75%; /* Narrower chat area */
+  }
+
+  .messages {
+    max-height: calc(100vh - 250px); /* Adjust for larger header/input */
+  }
+}
+
+  /* Cart Layout */
+  .cart-layout {
+    grid-template-columns: 1fr; /* Stack items and summary */
+    gap: 1.5rem; /* Adjust gap */
+  }
+  .order-summary {
+    position: static; /* Remove sticky positioning */
+  }
+
+  /* Adjust cart item layout */
+  .cart-item {
+    grid-template-columns: 80px 1fr; /* Smaller image, stack details */
+    gap: 10px;
+    padding: 15px;
+  }
+  .item-image {
+    width: 80px;
+    height: 80px;
+  }
+  /* Hide unit label or adjust */
+  .unit-label {
+    font-size: 0.8rem; /* Smaller font */
+  }
+
+  /* Adjust header */
+  .dashboard-header {
+    padding: 0.75rem 1rem; /* Reduce padding */
+  }
+  .greeting-center h2 {
+    font-size: 1.3rem; /* Smaller font */
+  }
+  .greeting-center p {
+    font-size: 0.85rem; /* Smaller font */
+  }
+  .profile-avatar {
+    width: 40px; /* Smaller avatar */
+    height: 40px;
+  }
+
+  /* Adjust payment section */
+  .payment-section {
+    top: 60px; /* Adjust top position */
+    padding: 1.5rem; /* Reduce padding */
+    max-width: 100%; /* Full width */
+    border-radius: 0; /* Or specific mobile radius */
+  }
+
+  /* Adjust order card layout */
+  .order-card {
+    padding: 0.75rem; /* Reduce padding */
+  }
+  .order-header {
+    flex-direction: column; /* Stack order number and status */
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  /* Adjust feedback card layout */
+  .feedback-card {
+    padding: 1rem; /* Reduce padding */
+  }
+
+  /* Adjust quantity cart buttons/inputs */
+  .quantity-cart {
+    flex-direction: column; /* Stack input, select, button */
+    align-items: flex-start;
+    gap: 5px;
+  }
+  .quantity-cart input,
+  .quantity-cart select,
+  .quantity-cart button {
+    width: 100%; /* Full width */
+    max-width: 100%; /* Ensure full width */
+    padding: 0.5rem; /* Adjust padding */
+  }
+
+  /* Adjust message farmer button */
+  .message-farmer-btn {
+    padding: 0.5rem 1rem; /* Adjust padding */
+  }
+
+  /* Adjust review button */
+  .review-btn {
+    padding: 0.5rem; /* Adjust padding */
+  }
+
+  /* Adjust review box */
+  .review-box {
+    padding: 0.75rem; /* Reduce padding */
+  }
+  .comment-box {
+    flex-direction: column; /* Stack input and button */
+  }
+  .comment-box input,
+  .comment-box button {
+    width: 100%; /* Full width */
+  }
+
+  /* Adjust star size */
+  .star {
+    font-size: 1.1rem; /* Smaller stars */
+  }
+
+  /* Adjust cart header */
+  .cart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px;
+  }
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .items-count {
+    font-size: 0.9rem; /* Smaller font */
+  }
+  .clear-cart-btn {
+    align-self: flex-end; /* Align button to the end */
+  }
+
+  /* Adjust order summary details */
+  .summary-row {
+    font-size: 0.85rem; /* Smaller font */
+  }
+  .total-row {
+    font-size: 0.9rem; /* Smaller font */
+  }
+
+  /* Adjust messaging input */
+  .input-row input {
+    padding: 10px; /* Adjust padding */
+    font-size: 0.9rem; /* Smaller font */
+  }
+  .input-row button {
+    padding: 10px 15px; /* Adjust padding */
+    font-size: 0.9rem; /* Smaller font */
+  }
+
+  /* Adjust messages container height */
+  .messages {
+    max-height: calc(100vh - 250px); /* Adjust based on header + input height on mobile */
+  }
+}
+
+/* Tablet Styles (Optional, between mobile and desktop) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Add specific styles for tablets if needed */
+  /* For example, maybe 2 columns in product grid instead of 1 or many */
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  /* Maybe adjust messaging to show both panels but narrower */
+  .messaging-container {
+    height: 75vh; /* Adjust height */
+  }
+  .conversation-list {
+    width: 30%; /* Adjust width */
+  }
+  .chat-area {
+    width: 70%; /* Adjust width */
+  }
+  /* Adjust cart layout */
+  .cart-layout {
+    grid-template-columns: 2fr 1fr; /* Different ratio */
+  }
+}
 
 
 

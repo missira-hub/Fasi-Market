@@ -3,173 +3,105 @@
 namespace App\Http\Controllers;
 
 use App\Models\Conversation;
-use App\Models\User;
+use App\Models\ConversationParticipant;
+use App\Models\Message;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 
 class ConversationController extends Controller
 {
-    /**
-     * Get all conversations for the authenticated user.
-     * Includes last message and the other participant info.
-     */
-   public function index()
-{
-    $user = Auth::user();
-
-    $conversations = Conversation::with([
-        'users:id,name,avatar', // ✅ Use 'avatar', not 'avatar_url'
-        'messages' => function ($q) {
-            $q->latest()->limit(1);
-        },
-        'product:id,name'
-    ])
-    ->whereHas('users', fn($q) => $q->where('users.id', $user->id))
-    ->get();
-
-    return response()->json($conversations->map(function ($conv) use ($user) {
-        $otherUser = $conv->users->where('id', '!=', $user->id)->first();
-
-        return [
-            'id' => $conv->id,
-            'subject' => $conv->subject,
-            'product' => $conv->product ? ['id' => $conv->product->id, 'name' => $conv->product->name] : null,
-            'with_user' => $otherUser ? [
-                'id' => $otherUser->id,
-                'name' => $otherUser->name,
-                'avatar_url' => $otherUser->avatar_url ?? '/default-avatar.png' // ✅ This now works
-            ] : null,
-            'last_message' => $conv->messages->isNotEmpty() ? [
-                'message' => $conv->messages->first()->message,
-                'created_at' => $conv->messages->first()->created_at,
-            ] : null,
-            'created_at' => $conv->created_at,
-            'updated_at' => $conv->updated_at,
-        ];
-    }));
-}
-
-/**
- * Get all messages in a conversation with sent/received differentiation.
- * Marks received messages as read.
- */
-public function messages($conversationId)
+    public function __construct()
     {
-        try {
-            $user = Auth::user();
-$conversation = Conversation::with([
-    'users', 
-    'messages.sender:id,name,avatar' // ✅ Only real fields
-])->findOrFail($conversationId);
-            if (!$conversation->users->contains('id', $user->id)) {
-                return response()->json(['error' => 'Unauthorized'], 403);
-            }
-
-            $messages = $conversation->messages->map(function ($msg) use ($user, $conversation) {
-                return [
-                    'id' => $msg->id,
-                    'message' => $msg->message,
-                    'sender_id' => $msg->sender_id,
-                    'sender_name' => $msg->sender->name ?? 'Unknown',
-                    'sender_avatar' => $msg->sender->avatar_url ?? '/default-avatar.png', // ✅ OK
-                    'type' => $msg->sender_id === $user->id ? 'sent' : 'received',
-                    'status' => $msg->is_read ? 'read' : 'delivered',
-                    'created_at' => $msg->created_at->toDateTimeString(),
-                ];
-            });
-
-            // Mark unread messages as read for current user
-            $conversation->messages()
-                ->where('sender_id', '!=', $user->id)
-                ->where('is_read', false)
-                ->update(['is_read' => true]);
-
-            return response()->json($messages);
-
-        } catch (\Exception $e) {
-            Log::error('ConversationController@messages failed: '.$e->getMessage());
-            return response()->json(['error' => 'Failed to load messages'], 500);
-        }
+        $this->middleware('auth:sanctum'); // Use sanctum for API auth
     }
 
-    /**
-     * Start a new conversation or return existing one.
-     */
-    public function startChat(Request $request)
+    // --- List all conversations for logged-in user
+    public function index(Request $request)
+    {
+        $userId = $request->user()->id;
+
+        $conversations = Conversation::with([
+            'participants:id,name,avatar',          // load avatar column
+            'latestMessage.sender:id,name,avatar', // load sender avatar
+        ])
+        ->whereHas('participants', function($q) use ($userId){
+            $q->where('user_id', $userId);
+        })
+        ->orderByDesc('updated_at')
+        ->get()
+        ->map(function($conv) use ($userId){
+            $other = $conv->participants->where('id','!=',$userId)->first();
+            $conv->chat_name = $other ? $other->name : 'Unknown User';
+            $conv->chat_avatar = $other ? $other->avatar_url : '/default-avatar.png';
+
+            $conv->unread_count = $conv->messages()
+                ->where('is_read', false)
+                ->where('sender_id','!=',$userId)
+                ->count();
+
+            return $conv;
+        });
+
+        return response()->json($conversations->values());
+    }
+
+    // --- Start or get a conversation
+    public function start(Request $request)
     {
         $request->validate([
             'user_id' => 'required|exists:users,id',
-            'subject' => 'nullable|string|max:255'
         ]);
 
-        $currentUserId = Auth::id();
+        $authId = $request->user()->id;
         $otherUserId = $request->user_id;
 
-        if ($currentUserId === $otherUserId) {
-            return response()->json(['error' => 'Cannot chat with yourself'], 400);
-        }
+        $conversation = Conversation::whereHas('participants', function($q) use($authId){
+            $q->where('user_id',$authId);
+        })->whereHas('participants', function($q) use($otherUserId){
+            $q->where('user_id',$otherUserId);
+        })->first();
 
-        $conversation = Conversation::whereHas('users', fn($q) => $q->where('user_id', $currentUserId))
-            ->whereHas('users', fn($q) => $q->where('user_id', $otherUserId))
-            ->first();
-
-        if (!$conversation) {
+        if(!$conversation){
             $conversation = Conversation::create([
-                'subject' => $request->subject ?? 'New Conversation'
+                'title' => "Chat between $authId and $otherUserId",
+                'created_by' => $authId
             ]);
-            $conversation->users()->attach([$currentUserId, $otherUserId]);
+
+            $conversation->participants()->attach([$authId,$otherUserId]);
         }
 
-        return response()->json($conversation, $conversation->wasRecentlyCreated ? 201 : 200);
+        return response()->json([
+            'conversation' => $conversation->load('participants')
+        ]);
     }
 
-    /**
-     * Send a new message to a conversation.
-     */
-    public function sendMessage(Request $request, $conversationId)
+    // --- View single conversation with messages
+    public function show($id)
     {
-        $request->validate([
-            'message' => 'required|string|max:1000'
-        ]);
+        $conversation = Conversation::with([
+            'participants:id,name,avatar',
+            'messages.sender:id,name,avatar'
+        ])->findOrFail($id);
 
-        $user = Auth::user();
-
-        if ($conversationId === 'new' || $conversationId == 0) {
-            $request->validate(['receiver_id' => 'required|exists:users,id']);
-
-            $conversation = Conversation::whereHas('users', fn($q) => $q->where('user_id', $user->id))
-                ->whereHas('users', fn($q) => $q->where('user_id', $request->receiver_id))
-                ->first();
-
-            if (!$conversation) {
-                $conversation = Conversation::create(['subject' => 'New Conversation']);
-                $conversation->users()->attach([$user->id, $request->receiver_id]);
-            }
-        } else {
-            $conversation = Conversation::findOrFail($conversationId);
+        if(!$conversation->participants()->where('user_id', auth()->id())->exists()){
+            return response()->json(['message'=>'Not a participant'], 403);
         }
 
-        if (!$conversation->users->contains('id', $user->id)) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+        return response()->json($conversation);
+    }
+    // ConversationController.php
+   // Delete conversation
+    public function destroy($id)
+    {
+        $conversation = Conversation::findOrFail($id);
+        
+        // Check if user is a participant
+        if(!$conversation->participants()->where('user_id', auth()->id())->exists()){
+            return response()->json(['message'=>'Not a participant'],403);
         }
-
-        $message = $conversation->messages()->create([
-            'sender_id' => $user->id,
-            'message' => $request->message,
-            'is_read' => false
-        ]);
-
-$message->load('sender:id,name,avatar'); // ✅ Not avatar_url
-        return response()->json([
-            'id' => $message->id,
-            'message' => $message->message,
-            'sender_id' => $message->sender_id,
-            'sender_name' => $message->sender->name,
-            'sender_avatar' => $message->sender->avatar_url ?? '/default-avatar.png',
-            'type' => 'sent',
-            'status' => 'sent',
-            'created_at' => $message->created_at->toDateTimeString(),
-        ], 201);
+        
+        // Delete the conversation and all its messages
+        $conversation->delete();
+        
+        return response()->json(['message'=>'Conversation deleted successfully']);
     }
 }

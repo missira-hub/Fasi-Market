@@ -113,4 +113,9 @@ class User extends Authenticatable
     {
         return $this->hasOne(Admin::class);
     }
+
+public function cartItems()
+{
+    return $this->hasMany(Cart::class);
+}
 }

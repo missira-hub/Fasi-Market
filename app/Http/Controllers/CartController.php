@@ -161,19 +161,13 @@ class CartController extends Controller
 }
 public function getTotal(Request $request)
 {
-    $user = $request->user();
-
-    // Load cart items with related product data
-    $cartItems = $user->cartItems()->with('product')->get();
-
-    // Sum the total safely (only if product exists)
-    $total = $cartItems->sum(function ($cart) {
-        return $cart->product ? $cart->product->price * $cart->quantity : 0;
-    });
+    $total = $request->user()->cartItems()
+        ->with('product')
+        ->get()
+        ->sum(fn($item) => $item->product ? $item->product->price * $item->quantity : 0);
 
     return response()->json(['total' => $total]);
 }
-
 
 
 }

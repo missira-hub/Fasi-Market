@@ -1,5 +1,6 @@
 <template>
   <div class="register-page">
+    <div class="background-blur"></div>
     <div class="overlay">
       <div class="auth-form">
         <h2>Create Account</h2>
@@ -9,13 +10,37 @@
             <li v-for="(error, index) in errors" :key="index">{{ error }}</li>
           </ul>
         </div>
-         <div class="background-blur"></div>
 
         <form @submit.prevent="register">
           <input v-model="name" type="text" placeholder="Name" required />
           <input v-model="email" type="email" placeholder="Email" required />
-          <input v-model="password" type="password" placeholder="Password" required />
-          <input v-model="password_confirmation" type="password" placeholder="Confirm Password" required />
+          
+          <!-- Password -->
+          <div class="password-input-wrapper">
+            <input
+              v-model="password"
+              :type="showPassword ? 'text' : 'password'"
+              placeholder="Password"
+              required
+            />
+            <span class="toggle-password" @click="togglePasswordVisibility">
+              {{ showPassword ? '🙈' : '👁️' }}
+            </span>
+          </div>
+
+          <!-- Confirm Password -->
+          <div class="password-input-wrapper">
+            <input
+              v-model="password_confirmation"
+              :type="showConfirmPassword ? 'text' : 'password'"
+              placeholder="Confirm Password"
+              required
+            />
+            <span class="toggle-password" @click="toggleConfirmPasswordVisibility">
+              {{ showConfirmPassword ? '🙈' : '👁️' }}
+            </span>
+          </div>
+
           <button type="submit">Register</button>
         </form>
 
@@ -38,7 +63,9 @@ export default {
       email: '',
       password: '',
       password_confirmation: '',
-      errors: []
+      errors: [],
+      showPassword: false,
+      showConfirmPassword: false,
     };
   },
   methods: {
@@ -50,7 +77,7 @@ export default {
           name: this.name,
           email: this.email,
           password: this.password,
-          password_confirmation: this.password_confirmation
+          password_confirmation: this.password_confirmation,
         });
 
         localStorage.setItem('token', response.data.token);
@@ -64,8 +91,14 @@ export default {
           this.errors = ['Registration failed due to an unknown error.'];
         }
       }
-    }
-  }
+    },
+    togglePasswordVisibility() {
+      this.showPassword = !this.showPassword;
+    },
+    toggleConfirmPasswordVisibility() {
+      this.showConfirmPassword = !this.showConfirmPassword;
+    },
+  },
 };
 </script>
 
@@ -86,20 +119,21 @@ export default {
   height: 100vh;
   background: url('@/assets/hero.png') no-repeat center center;
   background-size: cover;
-  filter: blur(4px);
-  transform: scale(1.05); /* Slightly scale up to avoid edges showing */
+  filter: blur(1.5px);
+  transform: scale(1.2); /* Fixed: was '1.2px', should be unitless or % */
   z-index: -2;
 }
 
 .overlay {
-  background-color: rgba(0, 0, 0, 0);
+  background-color: rgba(0, 0, 0, 0.52);
   width: 100%;
   height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  
-}.auth-form {
+}
+
+.auth-form {
   background: rgb(250, 249, 249);
   padding: 2.5rem;
   border-radius: 12px;
@@ -108,10 +142,9 @@ export default {
   color: rgb(13, 165, 112);
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.56);
   text-align: center;
-
   display: flex;
   flex-direction: column;
-  gap: 1rem; /* controls spacing between inputs and button */
+  gap: 1rem;
 }
 
 input,
@@ -122,7 +155,7 @@ button {
   font-size: 1rem;
   padding: 12px;
   border: 1px solid #ccc;
-  margin: 10px; /* remove any margin */
+  margin: 10px 0;
 }
 
 button {
@@ -133,21 +166,17 @@ button {
   cursor: pointer;
   transition: 0.3s;
   border-radius: 6px;
-  /* override border from input */
-  border: none;
 }
 
 button:hover {
   background: #369f72;
 }
 
-
 .switch-link {
   margin-top: 1rem;
   font-size: 0.9rem;
-  color:rgb(14, 14, 14);
+  color: rgb(14, 14, 14);
 }
-
 
 .switch-link a {
   color: rgb(13, 165, 122);
@@ -156,9 +185,30 @@ button:hover {
 
 .error-box {
   background-color: #ffe5e5;
-  color:rgb(0, 0, 0);
+  color: rgb(0, 0, 0);
   border-radius: 5px;
   padding: 10px;
   margin-bottom: 1rem;
 }
-</style>
+
+/* Password toggle styles */
+.password-input-wrapper {
+  position: relative;
+  margin: 10px 0;
+}
+
+.password-input-wrapper input {
+  padding-right: 40px;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  font-size: 1.1rem;
+  user-select: none;
+  color: #777;
+}
+</style> 

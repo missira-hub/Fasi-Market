@@ -44,36 +44,45 @@ class ConversationController extends Controller
         return response()->json($conversations->values());
     }
 
-    // --- Start or get a conversation
     public function start(Request $request)
-    {
-        $request->validate([
-            'user_id' => 'required|exists:users,id',
-        ]);
+{
+    $request->validate([
+        'user_id' => 'required|exists:users,id',
+    ]);
 
-        $authId = $request->user()->id;
-        $otherUserId = $request->user_id;
+    $authId = $request->user()->id;
+    $otherUserId = $request->user_id;
 
-        $conversation = Conversation::whereHas('participants', function($q) use($authId){
-            $q->where('user_id',$authId);
-        })->whereHas('participants', function($q) use($otherUserId){
-            $q->where('user_id',$otherUserId);
-        })->first();
-
-        if(!$conversation){
-            $conversation = Conversation::create([
-                'title' => "Chat between $authId and $otherUserId",
-                'created_by' => $authId
-            ]);
-
-            $conversation->participants()->attach([$authId,$otherUserId]);
-        }
-
-        return response()->json([
-            'conversation' => $conversation->load('participants')
-        ]);
+    if ($authId == $otherUserId) {
+        return response()->json(['message' => 'Cannot message yourself.'], 400);
     }
 
+    $conversation = Conversation::whereHas('participants', fn($q) => $q->where('user_id', $authId))
+        ->whereHas('participants', fn($q) => $q->where('user_id', $otherUserId))
+        ->first();
+
+    if (!$conversation) {
+        $conversation = Conversation::create([
+            'title' => "Chat between {$authId} and {$otherUserId}",
+            'created_by' => $authId,
+        ]);
+        $conversation->participants()->attach([$authId, $otherUserId]);
+    }
+
+    // Load relationships
+    $conversation->load([
+        'participants:id,name,avatar',
+        'latestMessage.sender:id,name,avatar'
+    ]);
+
+    // Add helper fields (as done in index())
+    $other = $conversation->participants->firstWhere('id', '!=', $authId);
+    $conversation->chat_name = $other?->name ?? 'Unknown User';
+    $conversation->chat_avatar = $other?->avatar ?? '/default-avatar.png';
+    $conversation->unread_count = 0;
+
+    return response()->json($conversation);
+}
     // --- View single conversation with messages
     public function show($id)
     {

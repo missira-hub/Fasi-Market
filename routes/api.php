@@ -24,6 +24,8 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\Farmer\SalesController;
 use App\Http\Controllers\Farmer\FarmerOrderController;
+use App\Http\Controllers\FarmerController;
+use App\Http\Controllers\ForgotPasswordController;
 
 
 
@@ -138,8 +140,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/consumer/cart', [CartController::class, 'index']);
     Route::post('/consumer/cart', [CartController::class, 'store']);
     Route::put('/consumer/cart/{id}', [CartController::class, 'update']);
+    Route::delete('/consumer/cart/clear', [CartController::class, 'clear']);
     Route::delete('/consumer/cart/{id}', [CartController::class, 'destroy']);
-Route::delete('/consumer/cart/clear', [CartController::class, 'clear']);
 
     // Orders
     Route::post('/checkout', [OrderController::class, 'checkout']);
@@ -192,11 +194,11 @@ Route::middleware(['auth:sanctum', 'isAdmin'])->prefix('admin')->group(function 
 Route::middleware('auth:sanctum')->group(function () {
     
     Route::get('/conversations', [ConversationController::class, 'index']);
-    Route::post('/conversations/start', [ConversationController::class, 'start']);
+    Route::post('/conversations', [ConversationController::class, 'start']); 
     Route::get('/conversations/{id}', [ConversationController::class, 'show']);
+    Route::delete('/conversations/{id}', [ConversationController::class, 'destroy']); // ✅ ADD THIS
     // routes/api.php
     Route::post('/conversations/{conversationId}/read', [MessageController::class, 'markAsRead']);
-
     // 👇 Messages
     Route::get('/conversations/{conversation}/messages', [MessageController::class, 'index']);
     Route::post('/messages', [MessageController::class, 'store']);
@@ -205,8 +207,13 @@ Route::middleware('auth:sanctum')->group(function () {
     
 
 
-Route::middleware('auth:sanctum')->post('/feedback', [FeedbackController::class, 'store']);
 
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/feedback', [FeedbackController::class, 'store']); // ✅ You already have this
+    Route::post('/feedback/{id}/reply', [FeedbackController::class, 'reply']);
+    Route::post('/reviews/{id}/approve', [FeedbackController::class, 'approve']); // 👈 ADD THIS
+    // Add other farmer routes like reply, delete, etc.
+});
 Route::get('categories', [CategoryController::class, 'index']);
 Route::get('categories/{category}', [CategoryController::class, 'show']);
 
@@ -250,17 +257,16 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 
-Route::post('/webhook/stripe', [PaymentController::class, 'handleStripeWebhook']);
-// routes/api.php
-Route::post('/stripe/webhook', [PaymentController::class, 'handleWebhook']);
-
+// Webhooks must be public (no auth middleware)
+// ✅ PUBLIC WEBHOOK ENDPOINT (no auth middleware!)
+Route::post('/webhook', [PaymentController::class, 'handleWebhook']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/farmer/sales-history', [SalesController::class, 'salesHistory']);
 });
 Route::get('/payment-success', [PaymentController::class, 'success']);
 
 // routes/api.php
-Route::middleware('auth:sanctum')->post('/orders/{order}/checkout', [PaymentController::class, 'checkoutOrder']);
+Route::middleware('auth:sanctum')->post('/checkout', [OrderController::class, 'checkout']);
 Route::middleware('auth:sanctum')->post('/create-checkout-session', [PaymentController::class, 'createCheckoutSession']);
 
 Route::get('/payment/verify', function (Request $request) {
@@ -282,4 +288,37 @@ Route::get('/payment/verify', function (Request $request) {
         ], 500);
     }
     
+    
 });
+
+Route::middleware('auth')->group(function () {
+    // Admin triggers farmer onboarding
+    Route::get('/stripe/onboard/{user}', [PaymentController::class, 'onboardFarmer']);
+
+    // Consumer triggers checkout
+    Route::post('/stripe/checkout', [PaymentController::class, 'createCheckoutSession']);
+});
+
+// Stripe webhooks
+
+Route::get('/farmer/onboarding/success', function(Request $request) {
+    $user = auth()->user(); // or find farmer by session / query
+
+    if ($user && $user->stripe_user_id) {
+        $user->stripe_connected = true;
+        $user->save();
+    }
+
+    return redirect('/dashboard')->with('success', 'Your Stripe account is connected!');
+});
+// routes/api.php
+Route::post('/admin/users/{id}/stripe-connect', [PaymentController::class, 'onboardFarmer']);
+// Called if user cancels onboarding and wants to retry
+Route::get('/stripe/refresh', function() {
+    return redirect()->back()->with('message', 'Please try connecting Stripe again.');
+})->name('stripe.refresh');
+
+// Called after successful Stripe onboarding
+Route::get('/stripe/success', function() {
+    return redirect()->back()->with('message', 'Stripe account connected successfully!');
+})->name('stripe.success');

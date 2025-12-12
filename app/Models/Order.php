@@ -2,20 +2,31 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\OrderItem;
-use App\Models\User;
 
 class Order extends Model
 {
-    use HasFactory;
+    protected $primaryKey = 'id'; // ← or 'order_id' — which one is it?
+    public $incrementing = true;
+    protected $keyType = 'int';
 
   protected $fillable = [
     'user_id',
-    'total',
-    'status', // ✅ Add this
+    'total_price',
+    'status',
+    'delivery_method', // ← add this
+    'shipped_at'
 ];
+
+    public function items()
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    public function address()
+    {
+        return $this->hasOne(OrderAddress::class);
+    }
 
 
     /**
@@ -26,13 +37,7 @@ class Order extends Model
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Get the order items for this order.
-     */
-    public function items()
-    {
-        return $this->hasMany(OrderItem::class);
-    }
+
     public function order_items()
 {
     return $this->hasMany(\App\Models\OrderItem::class);
@@ -43,8 +48,5 @@ public function customer()
     return $this->belongsTo(User::class, 'user_id');
 }
 
-public function address()
-{
-    return $this->hasOne(OrderAddress::class);
-}
+
 }

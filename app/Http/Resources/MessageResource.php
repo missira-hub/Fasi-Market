@@ -10,14 +10,19 @@ class MessageResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'content' => $this->content,
+            'conversation_id' => $this->conversation_id,
             'sender_id' => $this->sender_id,
-            'sender_name' => $this->sender->name,
-            'is_me' => $this->sender_id === auth()->id(),
-            'read' => $this->read,
+            'message_text' => $this->message_text,
             'created_at' => $this->created_at,
-            'updated_at' => $this->updated_at,
-            'time_ago' => $this->created_at->diffForHumans()
+
+            // ✅ Include reply context
+            'reply_to_message_id' => $this->reply_to_message_id,
+            'reply_to_sender_name' => $this->reply_to_sender_name,
+            'reply_to_message_text' => $this->reply_to_message_text,
+
+            'attachment_url' => $this->attachment_url
+                ? asset('storage/' . $this->attachment_url)
+                : null,
         ];
     }
 }

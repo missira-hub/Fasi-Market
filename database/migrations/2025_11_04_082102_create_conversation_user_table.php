@@ -4,28 +4,30 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
+class CreateConversationUserTable extends Migration
 {
-    public function up(): void
+    public function up()
     {
         Schema::create('conversation_user', function (Blueprint $table) {
-            $table->id();
-            
-            // Match the types with conversations.id and users.id
-            $table->foreignId('conversation_id')
-                  ->constrained('conversations')
+            $table->integer('conversation_id')->unsigned();
+            $table->integer('user_id')->unsigned();
+
+            $table->foreign('conversation_id')
+                  ->references('id')
+                  ->on('conversations')
                   ->onDelete('cascade');
 
-            $table->foreignId('user_id')
-                  ->constrained('users')
+            $table->foreign('user_id')
+                  ->references('id')
+                  ->on('users')
                   ->onDelete('cascade');
 
-            $table->timestamps();
+            $table->primary(['conversation_id', 'user_id']);
         });
     }
 
-    public function down(): void
+    public function down()
     {
         Schema::dropIfExists('conversation_user');
     }
-};
+}

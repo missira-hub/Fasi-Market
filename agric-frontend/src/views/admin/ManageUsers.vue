@@ -19,6 +19,7 @@
 
         <!-- Footer Actions -->
         <div class="card-footer">
+          <!-- Upgrade / Downgrade -->
           <button
             v-if="user.role === 'consumer' && userActionConfirmId !== user.id"
             @click="showUpgradeConfirm(user.id)"
@@ -35,6 +36,16 @@
             🛒 Downgrade to Consumer
           </button>
 
+          <!-- Stripe Onboarding Button (Farmers Only) -->
+          <button
+            v-if="user.role === 'farmer'"
+            @click="connectStripe(user.id)"
+            class="btn-connect-stripe"
+          >
+            💳 Connect Stripe
+          </button>
+
+          <!-- Delete -->
           <button
             v-if="userActionConfirmId !== user.id"
             class="btn-delete"
@@ -73,9 +84,9 @@ export default {
   data() {
     return {
       users: [],
-      messages: {},               // Inline messages per user
-      userActionConfirmId: null,  // User ID waiting for confirmation
-      userActionType: null        // 'upgrade', 'downgrade', 'delete'
+      messages: {},
+      userActionConfirmId: null,
+      userActionType: null
     }
   },
   computed: {
@@ -155,6 +166,23 @@ export default {
       }
     },
 
+    // ==== Stripe Connect ====
+    async connectStripe(userId) {
+      try {
+        const token = localStorage.getItem('token')
+        const response = await axios.post(
+          `http://127.0.0.1:8000/api/admin/users/${userId}/stripe-connect`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        window.open(response.data.url, '_blank')
+        this.setMessage(userId, 'Redirecting to Stripe onboarding...')
+      } catch (err) {
+        console.error('Stripe connect error:', err)
+        this.setMessage(userId, 'Failed to start Stripe onboarding.')
+      }
+    },
+
     // ==== Inline messages ====
     setMessage(userId, text) {
       this.messages[userId] = text
@@ -193,22 +221,22 @@ export default {
 }
 .btn-yes {
   background-color: #dc2626;
-  color:white;
-  border:none;
-  padding:0.3rem 0.6rem;
-  border-radius:4px;
-  cursor:pointer;
-  font-size:0.8rem;
+  color: white;
+  border: none;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
 }
 .btn-yes:hover { background-color: #b91c1c; }
 .btn-no {
   background-color: #f3f4f6;
-  color:#374151;
-  border:none;
-  padding:0.3rem 0.6rem;
-  border-radius:4px;
-  cursor:pointer;
-  font-size:0.8rem;
+  color: #374151;
+  border: none;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
 }
 .btn-no:hover { background-color: #e5e7eb; }
 
@@ -337,6 +365,20 @@ export default {
 
 .btn-delete:hover {
   background: #dc2626;
+}
+
+/* Stripe Connect Button */
+.btn-connect-stripe {
+  background-color: #6772e5;
+  color: white;
+  border: none;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.btn-connect-stripe:hover {
+  background-color: #5469d4;
 }
 
 /* === No Users === */

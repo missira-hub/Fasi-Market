@@ -33,3 +33,38 @@ Route::get('/payment-success', function () {
 Route::get('/payment-cancel', function () {
     return view('payment-cancel');
 });
+use App\Models\User;
+use Stripe\Stripe;
+use Stripe\Account;
+use Stripe\AccountLink;
+
+Route::get('/onboard-farmer/{id}', function ($id) {
+    Stripe::setApiKey(config('services.stripe.secret'));
+
+    $user = User::findOrFail($id);
+
+    // If they don’t have a Stripe account yet, create one
+    if (!$user->stripe_account_id) {
+        $account = Account::create([
+            'type' => 'express',
+            'country' => 'FR',
+            'email' => $user->email,
+            'capabilities' => [
+                'card_payments' => ['requested' => true],
+                'transfers' => ['requested' => true],
+            ],
+        ]);
+        $user->stripe_account_id = $account->id;
+        $user->save();
+    }
+
+    // Generate AccountLink URL
+    $accountLink = AccountLink::create([
+        'account' => $user->stripe_account_id,
+        'refresh_url' => url("/onboard-farmer/{$id}"),
+        'return_url' => url('/farmer/dashboard'),
+        'type' => 'account_onboarding',
+    ]);
+
+    return redirect($accountLink->url);
+});

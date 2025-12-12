@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
+use App\Models\OrderAddress; 
 
 class OrderController extends Controller
 {
@@ -67,18 +68,20 @@ class OrderController extends Controller
     /**
      * Checkout all items in cart
      */
-
+/**
+ * Create a pending order from cart (for Stripe payment)
+ */
+/**
+ * Checkout all items in cart
+ */
 public function checkout(Request $request)
 {
     $user = $request->user();
 
-    // Validate input
+    // ✅ Only validate fields you actually send from Vue
     $request->validate([
-        'full_address' => 'required|string|max:500',
-        'city' => 'nullable|string|max:100',
-        'postal_code' => 'nullable|string|max:20',
-        'phone' => 'nullable|string|max:20',
-        'delivery_method' => 'required|in:delivery,pickup'
+        'full_address'    => 'required|string|max:500',
+        'delivery_method' => 'required|in:delivery,pickup', // Must match Vue values
     ]);
 
     $cartItems = Cart::with('product')->where('user_id', $user->id)->get();
@@ -87,48 +90,55 @@ public function checkout(Request $request)
         return response()->json(['error' => 'Your cart is empty'], 400);
     }
 
-    // Calculate total
-    $total = $cartItems->sum(fn($item) => $item->product->price * $item->quantity);
+    // 🔒 Remove invalid cart items (product deleted)
+    $validCartItems = $cartItems->filter(fn($item) => $item->product !== null);
+    if ($validCartItems->isEmpty()) {
+        return response()->json(['error' => 'All items in your cart are no longer available.'], 400);
+    }
+
+    $total = $validCartItems->sum(fn($item) => $item->product->price * $item->quantity);
 
     DB::beginTransaction();
     try {
-        // Create order
         $order = Order::create([
-            'user_id' => $user->id,
-            'total_price' => $total,
-            'status' => 'paid',
+            'user_id'         => $user->id,
+            'total_price'     => $total,
+            'status'          => 'pending',
             'delivery_method' => $request->delivery_method,
         ]);
 
-        // Add order items
-        foreach ($cartItems as $item) {
+        foreach ($validCartItems as $item) {
+            if ($item->product->quantity < $item->quantity) {
+                throw new \Exception("Insufficient stock for {$item->product->name}");
+            }
+
             OrderItem::create([
-                'order_id' => $order->id,
+                'order_id'   => $order->id,
                 'product_id' => $item->product_id,
-                'quantity' => $item->quantity,
-                'price' => $item->product->price,
+                'quantity'   => $item->quantity,
+                'price'      => $item->product->price,
             ]);
         }
 
-        // Create shipping address
+        // ✅ Only save full_address (you don't send city/postal/phone separately)
         OrderAddress::create([
-            'order_id' => $order->id,
+            'order_id'     => $order->id,
             'full_address' => $request->full_address,
-            'city' => $request->city,
-            'postal_code' => $request->postal_code,
-            'phone' => $request->phone ?? $user->phone, // Fallback to user's phone
+            'city'         => null,           // Optional: parse from full_address later
+            'postal_code'  => null,           // Optional
+            'phone'        => $user->phone ?? null, // Use user's phone if available
         ]);
 
-        // Clear cart
         Cart::where('user_id', $user->id)->delete();
 
         DB::commit();
 
         return response()->json([
-            'message' => 'Checkout successful',
+            'message'  => 'Order created. Proceed to payment.',
             'order_id' => $order->id,
-            'total' => $total
+            'total'    => $total
         ]);
+
     } catch (\Exception $e) {
         DB::rollBack();
         \Log::error('Checkout failed: ' . $e->getMessage());
@@ -138,9 +148,6 @@ public function checkout(Request $request)
         ], 500);
     }
 }
-    /**
-     * Get authenticated user's orders
-     */
    public function userOrders()
 {
     $orders = Order::with('items.product')

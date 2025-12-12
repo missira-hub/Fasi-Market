@@ -25,14 +25,15 @@
           <input v-model="form.password_confirmation" type="password" placeholder="Confirm new password" />
         </label>
 
-        <label>
-          Change Avatar:
-          <input type="file" @change="handleAvatarChange" accept="image/*" />
-        </label>
+       <label>
+  Change Avatar:
+  <input type="file" @change="handleAvatarChange" accept="image/*" />
+</label>
 
-        <div v-if="imagePreview" class="avatar-preview">
-          <img :src="imagePreview" alt="Avatar preview" />
-        </div>
+<div v-if="imagePreview" class="avatar-preview">
+  <img :src="imagePreview" alt="Avatar preview" />
+</div>
+
 
         <button type="submit" :disabled="isLoading">
           {{ isLoading ? 'Updating...' : 'Update Profile' }}
@@ -64,7 +65,6 @@ const isLoading = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
 
-// Fetch current user profile on mount
 onMounted(async () => {
   try {
     const token = localStorage.getItem('token')
@@ -77,20 +77,27 @@ onMounted(async () => {
     const user = response.data
     form.value.name = user.name || ''
     form.value.email = user.email || ''
-    imagePreview.value = user.avatar_url
-      ? `http://127.0.0.1:8000/storage/${user.avatar_url}`
-      : ''
+
+    // Use full URL if avatar exists
+    if (user.avatar_url) {
+      imagePreview.value = user.avatar_url.startsWith('http')
+        ? user.avatar_url
+        : `http://127.0.0.1:8000/storage/${user.avatar_url}`
+    } else {
+      imagePreview.value = ''
+    }
 
   } catch (error) {
     errorMessage.value = error.response?.data?.message || error.message
   }
 })
 
+
 const handleAvatarChange = (e) => {
   const file = e.target.files[0]
   if (file) {
-    form.value.avatar = file
-    imagePreview.value = URL.createObjectURL(file)
+    form.value.avatar = file // Store the file for submission
+    imagePreview.value = URL.createObjectURL(file) // Create a local preview URL
   }
 }
 
@@ -164,50 +171,56 @@ const close = () => {
   position: relative;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
-
-/* Profile Modal Styles */
-
-.profile-modal {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  z-index: 9999;
-  max-width: 500px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
 /* Modal Overlay */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  bottom: 10;
+  bottom: 0; /* ← Fix: was "bottom: 10" */
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(5px);
   z-index: 9998;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 1rem; /* ← Allows safe margin on small screens */
+  overflow-y: auto; /* ← Ensures overlay can scroll if needed */
 }
 
+/* Scrollable Modal Content */
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh; /* ← Prevents overflow beyond viewport */
+  overflow-y: auto; /* ← Makes content scrollable */
+  position: relative;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  box-sizing: border-box; /* ← Ensures padding is included in height */
+}
+
+/* Keep close button visible at the top */
 .close-btn {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: none;
-  border: none;
-  font-size: 1.5rem;
+  position: sticky;
+  top: 0;
+  right: 0;
+  z-index: 10;
+  background: white;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
   cursor: pointer;
   color: #666;
+  border: 1px solid #eee;
+  margin-left: auto;
+  margin-bottom: 1rem;
 }
 
 h2 {
@@ -257,7 +270,7 @@ button[type="submit"]:disabled {
 }
 
 .avatar-preview {
-  margin: 1rem 0;
+  margin-top: 1rem;
   text-align: center;
 }
 
@@ -268,7 +281,6 @@ button[type="submit"]:disabled {
   object-fit: cover;
   border: 3px solid #eee;
 }
-
 .success {
   color: #28a745;
   margin-top: 1rem;

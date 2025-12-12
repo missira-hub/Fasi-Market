@@ -3,12 +3,23 @@
     <div class="background-blur"></div>
     <div class="overlay">
       <div class="login-card">
-        <h2>Welcome Back 👋</h2>
+        <h2>Welcome Back</h2>
         <p class="subtitle">Login to your account</p>
 
         <form @submit.prevent="login">
           <input v-model="email" type="email" placeholder="Email address" required />
-          <input v-model="password" type="password" placeholder="Password" required />
+          
+          <div class="password-input-wrapper">
+            <input
+              v-model="password"
+              :type="showPassword ? 'text' : 'password'"
+              placeholder="Password"
+              required
+            />
+            <span class="toggle-password" @click="togglePasswordVisibility">
+              {{ showPassword ? '🙈' : '👁️' }}
+            </span>
+          </div>
 
           <!-- Error Message -->
           <p v-if="errorMessage" class="error-msg">{{ errorMessage }}</p>
@@ -39,6 +50,7 @@ export default {
       email: '',
       password: '',
       errorMessage: '',
+      showPassword: false, // 👈 controls password visibility
     };
   },
   methods: {
@@ -87,9 +99,11 @@ export default {
           'Failed to send recovery email. Make sure the email is correct.';
       }
     },
+    togglePasswordVisibility() {
+      this.showPassword = !this.showPassword;
+    },
   },
 };
-
 </script>
 
 <style scoped>
@@ -132,29 +146,25 @@ export default {
   height: 100vh;
   background: url('@/assets/hero.png') no-repeat center center;
   background-size: cover;
-  filter: blur(0px);
-  transform: scale(1.05); /* Slightly scale up to avoid edges showing */
+  filter: blur(1.2px);
+  transform: scale(1.05);
   z-index: -2;
 }
 
 .overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(0, 0, 0, 0.52);
+  width: 100%;
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1;
 }
 
 .login-card {
   background: rgba(255, 255, 255, 0.95);
   padding: 2.5rem 2rem;
   border-radius: 12px;
-  width: 90%;
+  width: 100%;
   max-width: 400px;
   color: #1e1e1e;
   box-shadow: 0 0 15px rgba(0, 0, 0, 0.96);
@@ -194,6 +204,26 @@ input {
   border-radius: 6px;
   color: #333;
   font-size: 1rem;
+}
+
+/* Password visibility toggle styles */
+.password-input-wrapper {
+  position: relative;
+}
+
+.password-input-wrapper input {
+  padding-right: 40px;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  font-size: 1.1rem;
+  user-select: none;
+  color: #777;
 }
 
 button {

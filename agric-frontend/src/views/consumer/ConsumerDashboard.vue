@@ -4,7 +4,7 @@
   <div class="dashboard-header">
     <!-- Centered Greeting (now properly centered) -->
     <div class="greeting-center">
-      <h2>👋 Hello, {{ firstName || 'User' }}</h2>
+      <h2>Hello, {{ firstName || 'User' }}</h2>
       <p>Welcome back to your dashboard</p>
     </div>
 
@@ -16,8 +16,13 @@
         alt="Profile"
         class="profile-avatar"
       />
-      <div v-else class="profile-avatar placeholder">{{ userInitial }}</div>
-      
+      <!-- Use an img tag for the default avatar -->
+      <img
+        v-else
+        :src="defaultAvatar"
+        alt="Default Profile"
+        class="profile-avatar"
+      />      
       <!-- Settings Dropdown -->
       <div v-if="settingsOpen" class="settings-menu">
         <ul>
@@ -61,11 +66,15 @@
       </div>
        
       <div @click="switchSection('cart')" :class="{ active: section === 'cart' }" class="nav-item">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 3h2l.4 2M7 13h10l4-8H5.4m1.6 8L5 3H3m4 10v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-6"></path>
-        </svg>
-        <span>Cart</span>
-      </div>
+  <div class="cart-tab-icon">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 3h2l.4 2M7 13h10l4-8H5.4m1.6 8L5 3H3m4 10v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-6"></path>
+    </svg>
+    <!-- Cart badge -->
+    <span v-if="cartItemCount > 0" class="cart-badge">{{ cartItemCount }}</span>
+  </div>
+  <span>Cart</span>
+</div>
       <div @click="switchSection('orders')" :class="{ active: section === 'orders' }" class="nav-item">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
@@ -96,25 +105,46 @@
     </nav>
 <main class="main-view">
   <!-- Loading Spinner -->
-  <div v-if="loading" class="loading-spinner">
-    <div class="spinner"></div>
-    <p>Loading...</p>
+<div v-if="loading" class="loading-spinner">
+  <div class="spinner"></div>
+  <p>Loading...</p>
+</div>
+
+<!-- ✅ CUSTOM CONFIRMATION MODAL (ADD THIS BLOCK) -->
+<div v-if="confirmVisible" class="custom-confirm-overlay">
+  <div class="custom-confirm-modal">
+    <p>{{ confirmMessage }}</p>
+    <div class="confirm-buttons">
+      <button @click="cancelConfirm" class="btn-cancel">Cancel</button>
+      <button @click="handleConfirm" class="btn-confirm">Confirm</button>
+    </div>
   </div>
+</div>
+
 
 <!-- MESSAGES SECTION -->
 <section v-if="section === 'messages'" class="messaging-section">
-  <div class="messaging-container">
+   <div class="messaging-container">
+    <!-- Mobile Back Button (always shown in messages on mobile) -->
+    <button
+      v-if="isMobile"
+      @click="goBackFromMessages"
+      class="mobile-section-back-button"
+    >
+      ← Back
+    </button>
     <!-- Conversations Sidebar -->
-    <div class="conversation-list">
-      <div class="conversation-header">
-        <h3>Messages</h3>
-        <input
-          v-model="conversationSearchQuery"
-          type="text"
-          placeholder="Search..."
-          class="search-box"
-        />
-      </div>
+<div class="conversation-list" :class="{ 'mobile-hidden': currentConversation }">
+    <div class="conversation-header">
+  <h3 v-if="!currentConversation">Messages</h3>
+
+  <input
+    v-model="conversationSearchQuery"
+    type="text"
+    placeholder="Search..."
+    class="search-box"
+  />
+</div>
       <div v-if="loadingConversations" class="loading">Loading conversations...</div>
       <ul v-else class="conversation-items">
         <li
@@ -126,13 +156,20 @@
           <!-- Use new helper for avatar -->
           <img :src="getConversationAvatar(conv)" class="avatar" />
           <div class="info">
-            <div class="top">
-              <!-- Use new helper for title -->
-              <strong>{{ getConversationTitle(conv) }}</strong>
-              <small>{{ formatTime(conv.latest_message?.created_at) }}</small>
-            </div>
-            <p class="last">{{ getLastMessagePreview(conv) }}</p>
-          </div>
+  <div class="top">
+    <strong>{{ getConversationTitle(conv) }}</strong>
+    <small>{{ formatTime(conv.latest_message?.created_at) }}</small>
+    <!-- Delete button (only visible on hover or always) -->
+    <button
+      @click.stop="deleteConversation(conv.id)"
+      class="delete-conv-btn"
+      title="Delete conversation"
+    >
+      ✕
+    </button>
+  </div>
+  <p class="last">{{ getLastMessagePreview(conv) }}</p>
+</div>
           <span v-if="conv.unread_count > 0" class="badge">
             {{ conv.unread_count > 9 ? '9+' : conv.unread_count }}
           </span>
@@ -147,18 +184,20 @@
       </div>
       <div v-else class="chat-window">
         <!-- Header -->
-        <div class="chat-header">
-          <img :src="getConversationAvatar(currentConversation)" class="avatar" />
-          <div>
-            <h4>{{ getConversationTitle(currentConversation) }}</h4>
-            <small>Online</small>
-          </div>
-          <!-- Placeholder for more options icon -->
-          <div class="chat-options">
-            <!-- Add options icon SVG here -->
-          </div>
-        </div>
-
+       <div class="chat-header">
+  <button 
+    v-if="currentConversation" 
+    @click="currentConversation = null" 
+    class="back-button"
+  >
+    ←
+  </button>
+  <img :src="getConversationAvatar(currentConversation)" class="avatar" />
+  <div>
+    <h4>{{ getConversationTitle(currentConversation) }}</h4>
+    <small>Online</small>
+  </div>
+</div>
         <!-- Scrollable messages area -->
         <div class="messages-wrapper">
           <div class="messages" ref="messagesContainer">
@@ -191,6 +230,11 @@
                       <strong v-if="msgIndex === 0 && senderGroup.sender_id !== userId">
                         {{ senderGroup.sender_name }}
                       </strong>
+             <!-- Inline reply preview for sent messages -->
+           <div v-if="msg.reply_to_sender_name" class="inline-reply-preview">
+        <span class="reply-label">Replying to: {{ msg.reply_to_sender_name }}</span>
+            <p class="reply-text">{{ msg.reply_to_message_text }}</p>
+                  </div>
                       <div class="message-content">
                         {{ msg.message_text || msg.message }}
                         <!-- Display images/files if present -->
@@ -216,20 +260,21 @@
                       </div>
 
                       <!-- Message options (three dots) - only on last message in group -->
-                      <div
-                        v-if="msgIndex === senderGroup.messages.length - 1"
-                        :class="['message-options', selectedMessageId === msg.id ? 'active' : '']"
-                        @click.stop="toggleMessageOptions(msg.id)"
-                      >
-                        ⋮
-                      </div>
-                      <div v-if="selectedMessageId === msg.id" class="options-menu">
-                        <button @click.stop="replyToMessage(msg)">Reply</button>
-                        <button @click.stop="forwardMessage(msg)">Forward</button>
-                        <button @click.stop="deleteMessage(msg)">Delete</button>
-                      </div>
-                    </div>
-                  </div>
+                  <!-- Inside each message bubble -->
+           <div 
+  v-if="msgIndex === senderGroup.messages.length - 1" 
+  :class="['message-options', selectedMessageId === msg.id ? 'active' : '']"
+  @click.stop="toggleMessageOptions(msg.id)">
+  ⋮
+  </div>
+   <div v-if="selectedMessageId === msg.id" class="options-menu">
+  <button @click.stop="replyToMessage(msg)">Reply</button>
+  <button @click.stop="forwardMessage(msg)">Forward</button>
+  <button @click.stop="deleteMessage(msg)">Delete</button>
+</div>
+</div>
+</div>
+
                 </div>
               </div>
             </div>
@@ -284,7 +329,10 @@
   </div>
 </section>
 
-
+  <!-- Example notification component -->
+  <div v-if="notification.show" :class="['notification', notification.type]">
+    {{ notification.message }}
+  </div>
 
   <section v-if="section === 'market' && !loading" class="card-section">
  <!-- SEARCH BAR -->
@@ -354,7 +402,7 @@
 
 <!-- Quantity with unit -->
 <p>
-  <strong>Stock:</strong> {{ product.quantity }}
+  <strong>In Stock:</strong> {{ product.quantity }}
   <span v-if="product.unit"> {{ product.unit.abbreviation }}</span>
 </p>
 
@@ -410,10 +458,9 @@
   />
   
 
-  <!-- Dropdown for unit -->
 <select v-model="selectedUnits[product.id]">
   <option
-    v-for="unit in availableUnits"
+    v-for="unit in uniqueAvailableUnits"
     :key="unit.id"
     :value="unit.abbreviation"
   >
@@ -586,7 +633,7 @@
               <line x1="8" y1="21" x2="16" y2="21"/>
               <line x1="12" y1="17" x2="12" y2="21"/>
             </svg>
-            Proceed to Checkout
+            Proceed to Payment
           </button>
           
           <button class="continue-btn" @click="switchSection('market')">
@@ -622,7 +669,7 @@
   <div v-if="orders.length" class="orders-grid">
     <div class="card order-card" v-for="order in orders" :key="order.id">
       <div class="order-header">
-        <p><strong>Order #{{ order.id }}</strong></p>
+<p><strong>Order #{{ order.displayId }}</strong></p>
         <span class="status-badge" :class="order.status.toLowerCase()">
           {{ order.status }}
         </span>
@@ -722,48 +769,115 @@
   </div>
 </section>
 
+<section v-if="section === 'payment'" class="payment-section">
+  <h2>Complete Your Order</h2>
+  <div class="payment-container">
+    <div v-if="cart.length === 0" class="empty-cart">
+      <p>Your cart is empty</p>
+      <button @click="switchSection('market')" class="btn-primary">Continue Shopping</button>
+    </div>
+    <div v-else>
+      <!-- Delivery Information -->
+      <div class="delivery-info">
+        <h3>Delivery Information</h3>
+
+        <label for="full-address">Full Delivery Address</label>
+        <textarea
+          id="full-address"
+          v-model="fullAddress"
+          placeholder="e.g., 123 Main St, Istanbul, 34000, Turkey"
+          class="address-input"
+          :disabled="paymentProcessing"
+          required
+        ></textarea>
+
+      <label for="delivery-method">Delivery Method</label>
+<select v-model="deliveryMethod">
+  <option value="" disabled>-- Choose delivery method --</option>
+  <option value="delivery">Standard Delivery (3–5 days)</option>
+  <option value="pickup">Store Pickup</option>
+</select>
+      </div>
+
+      <!-- Order Summary -->
+      <div class="order-summary">
+        <h3>Order Summary</h3>
+        <div class="summary-items">
+          <div v-for="item in cart" :key="item.product_id" class="summary-item">
+            <span>{{ item.name }} ({{ item.quantity }})</span>
+            <span>₺{{ (item.unit_price * item.quantity).toFixed(2) }}</span>
+          </div>
+        </div>
+        <div class="summary-total">
+          <span><strong>Total:</strong></span>
+          <span><strong>₺{{ totalCartValue }}</strong></span>
+        </div>
+      </div>
+
+      <!-- Payment Method Selection -->
+      <div class="payment-methods">
+        <h3>Payment Method</h3>
+
+        <!-- Payment Options Radio -->
+        <div class="payment-options">
+          <label class="payment-option">
+            <input
+              type="radio"
+              v-model="selectedPaymentMethod"
+              value="card"
+              :disabled="paymentProcessing"
+            />
+            <div class="option-content">
+              <div class="option-icon">💳</div>
+              <div>
+                <div class="option-title">Credit/Debit Card</div>
+                <div class="option-desc">Pay securely with Stripe</div>
+              </div>
+            </div>
+          </label>
+
+          <label class="payment-option">
+            <input
+              type="radio"
+              v-model="selectedPaymentMethod"
+              value="cod"
+              :disabled="paymentProcessing"
+            />
+            <div class="option-content">
+              <div class="option-icon">💰</div>
+              <div>
+                <div class="option-title">Cash on Delivery</div>
+                <div class="option-desc">Pay in cash when your order arrives</div>
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <!-- Action Button -->
+        <button
+          @click="processPayment"
+          :disabled="paymentProcessing || !selectedPaymentMethod || !deliveryMethod"
+          class="pay-btn"
+        >
+          {{ paymentProcessing ? 'Processing...' : `Pay ₺${totalCartValue}` }}
+        </button>
+
+        <div v-if="paymentError" class="payment-error">
+          {{ paymentError }}
+        </div>
+        <div v-if="paymentProcessing" class="payment-processing">
+          Please wait...
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
 
     </main>
   </div>
 
-  <section v-if="section === 'payment'" class="payment-section">
-    <h2>Payment</h2>
-    <div class="payment-container">
-      <div v-if="cart.length === 0" class="empty-cart">
-        <p>Your cart is empty</p>
-        <button @click="switchSection('market')">Continue Shopping</button>
-      </div>
-      <div v-else>
-        <div class="order-summary">
-          <h3>Order Summary</h3>
-          <div class="summary-items">
-            <div v-for="item in cart" :key="item.product_id" class="summary-item">
-              <span>{{ item.name }} ({{ item.quantity }})</span>
-              <span>₺{{ (item.unit_price * item.quantity).toFixed(2) }}</span>
-            </div>
-          </div>
-          <div class="summary-total">
-            <span>Total:</span>
-            <span>₺{{ totalCartValue }}</span>
-          </div>
-        </div>
 
-        <div class="payment-methods">
-          <h3>Payment Method</h3>
-          <button @click="payWithStripe" class="stripe-pay-button">
-            Pay with Credit Card
-          </button>
-          <div v-if="paymentError" class="payment-error">
-            {{ paymentError }}
-          </div>
-          <div v-if="paymentProcessing" class="payment-processing">
-            Processing payment...
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
   
 </template>
 
@@ -774,8 +888,17 @@ import axios from 'axios'
 import avatar from '@/assets/avatar.png'
 import ProfileModal from '@/components/ProfileModal.vue'
 import { loadStripe } from '@stripe/stripe-js';
+import { useAuthStore } from '@/stores/auth'
+import defaultAvatar from '@/assets/default-avatar.jpg'
 
 
+const notification = ref({ show: false, message: '', type: 'info' });
+const showNotifications = (message, type = 'info') => {
+  notification.value = { show: true, message, type };
+  setTimeout(() => { notification.value.show = false; }, 5000);
+};
+
+const showStatus = showNotifications;
 // Axios configuration
 axios.defaults.baseURL = 'http://127.0.0.1:8000'
 const router = useRouter()
@@ -804,11 +927,57 @@ const switchSection = async (target) => {
   }
 };
 
+const goToMessaging = async (product) => {
+  const farmerId = product?.user?.id;
+  const farmerName = product?.user?.name || 'Farmer';
+  if (!farmerId) {
+    globalError.value = 'Farmer ID is missing.';
+    return;
+  }
+
+  const token = localStorage.getItem('token');
+  if (!token) {
+    globalError.value = 'You must be logged in to message a farmer.';
+    return;
+  }
+
+  const existingConv = conversations.value.find(conv =>
+    conv.participants.some(p => Number(p.id) === farmerId)
+  );
+
+  if (existingConv) {
+    section.value = 'messages';
+    await selectConversation(existingConv);
+  } else {
+    try {
+      const res = await axios.post(
+        '/api/conversations',
+        { user_id: farmerId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const newConv = {
+        ...res.data,
+        // 💡 Inject farmer info so avatar logic works immediately
+        _farmerId: farmerId,
+        _farmerName: farmerName
+      };
+
+      conversations.value.push(newConv);
+      section.value = 'messages';
+      await selectConversation(newConv);
+    } catch (err) {
+      console.error('Failed to create conversation:', err);
+      globalError.value = err.response?.data?.message || 'Could not start conversation.';
+    }
+  }
+};
+
 const conversations = ref([])
 const currentConversation = ref(null)
 const conversationSearchQuery = ref('')
 const newMessage = ref('')
-const userId = ref(window.currentUserId || 1)
+const userId = computed(() => authStore.user?.id)
 const userAvatar = ref(window.currentUserAvatar || null)
 const loadingConversations = ref(false)
 const loadingMessages = ref(false)
@@ -816,6 +985,10 @@ const messagesContainer = ref(null)
 const showEmojiPicker = ref(false)
 const selectedFile = ref(null)
 const replyMessage = ref(null)
+const selectedMessageId = ref(null)
+const fileInput = ref(null)
+const authStore = useAuthStore()
+const getAvatar = getConversationAvatar
 
 
 
@@ -823,8 +996,8 @@ const replyMessage = ref(null)
 const emojiList = ref(['😀', '😂', '😍', '😎', '😊', '🥰', '😘', '😗', '😙', '😚', '🙂', '🤗', '🤩', '🤔', '🤨', '😐', '😑', '😶', '🙄', '😏', 
   '😣', '😥', '😮', '🤐', '😯', '😪', '😫', '😴', '😌', '😛', '😜', '😝', '🤤', '😒', '😓', '😔', '😕', '🙃', '🤑', '😲', 
   '☹️', '🙁', '😖', '😞', '😟', '😤', '😢', '😭', '😦', '😧', '😨', '😩', '😬', '😰', '😱', '😳', '🤪', '😵', '😡', '😠', 
-  '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '☝️', '✋', '🤚', ' Nolan', '🖖', '👋', '🤙', '💪', 
-  '❤️', '🧡', '💛', '💚', '💙', '-purple', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', 
+  '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '☝️', '✋', '🤚', '🖖', '👋', '🤙', '💪', 
+  '❤️', '🧡', '💛', '💚', '💙',  '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', 
   '🔥', '✨', '⭐', '🌟', '💫', '💥', '💦', '💨', '💫', '💯', '💢', '💥', '💫', '💦', '💨', '💫', '💯', '💢', '💥', '💫'])
 
 
@@ -877,39 +1050,30 @@ function getInitials(name) {
   return (first + last).toUpperCase()
 }
 const getConversationTitle = (conv) => conv.chat_name || 'Unknown User'
-
-
 function getConversationAvatar(conv) {
-  if (!conv || !conv.participants || conv.participants.length === 0) {
-    return getAvatarUrl("0", "User");
+  if (!conv || !conv.participants) return getAvatarUrl("0", "User");
+
+  const myId = userId.value ? Number(userId.value) : null;
+
+  // Try to find the other participant
+  let other = null;
+  if (myId !== null) {
+    other = conv.participants.find(p => Number(p.id) !== myId);
   }
 
-  const myId = Number(userId.value);
-
-  let others;
-
-  if (conv.participants.length === 1) {
-    // Only one person in conversation → that’s the other user
-    others = conv.participants;
-  } else {
-    // Remove myself
-    others = conv.participants.filter(p => Number(p.id) !== myId);
+  // If we couldn't find "other", use injected farmer data
+  if (!other && conv._farmerId) {
+    return getAvatarUrl(conv._farmerId, conv._farmerName);
   }
 
-  const other = others[0];
-
-  if (!other) {
-    return getAvatarUrl(conv.id, conv.chat_name || "User");
+  // If we have other with name → use it
+  if (other && (other.name || other.id)) {
+    return getAvatarUrl(other.id, other.name || 'User');
   }
 
-  if (other.avatar_url) return other.avatar_url;
-
-  return getAvatarUrl(other.id, other.name);
+  // Final fallback
+  return getAvatarUrl(conv.id || "0", conv.chat_name || "User");
 }
-
-
-
-
 
 // Function to group messages by date and sender
 function groupMessagesByDateAndSender(messages) {
@@ -1064,6 +1228,28 @@ function deleteMessage(message) {
   })
 }
 
+const confirmVisible = ref(false)
+const confirmMessage = ref('')
+const confirmCallback = ref(null)
+
+function showConfirm(message, callback) {
+  confirmMessage.value = message
+  confirmCallback.value = callback
+  confirmVisible.value = true
+}
+
+function handleConfirm() {
+  confirmVisible.value = false
+  if (typeof confirmCallback.value === 'function') {
+    confirmCallback.value()
+  }
+  confirmCallback.value = null
+}
+
+function cancelConfirm() {
+  confirmVisible.value = false
+  confirmCallback.value = null
+}
 
 function openFilePicker() {
   fileInput.value.click()
@@ -1172,81 +1358,128 @@ const formatTime = (ts) => {
 
 // --- API Calls
 const loadConversations = async () => {
-  loadingConversations.value = true
+  loadingConversations.value = true;
   try {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('token');
     const res = await axios.get('/api/conversations', {
       headers: { Authorization: `Bearer ${token}` }
-    })
-    conversations.value = res.data
+    });
+
+    // ✅ Sort conversations: newest (latest message) first
+    const sorted = res.data.sort((a, b) => {
+      const timeA = a.latest_message?.created_at
+        ? new Date(a.latest_message.created_at).getTime()
+        : 0;
+      const timeB = b.latest_message?.created_at
+        ? new Date(b.latest_message.created_at).getTime()
+        : 0;
+      return timeB - timeA; // Descending: newest first
+    });
+
+    conversations.value = sorted;
   } catch (e) {
-    console.error('Failed to load conversations', e)
+    console.error('Failed to load conversations', e);
   } finally {
-    loadingConversations.value = false
+    loadingConversations.value = false;
   }
-}
+};
+
 
 const selectConversation = async (conv) => {
-  currentConversation.value = { ...conv, messages: [] }
-  loadingMessages.value = true
+  // Move this conversation to the top of the list
+  conversations.value = [
+    conv,
+    ...conversations.value.filter(c => c.id !== conv.id)
+  ];
+
+  // Update UI immediately: show loading & set conversation
+  currentConversation.value = { ...conv, messages: [] };
+  loadingMessages.value = true;
 
   try {
-    const token = localStorage.getItem('token')
-    const res = await axios.get(`/api/conversations/${conv.id}/messages`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Bearer ${token}` };
 
-    const messages = res.data
-    currentConversation.value.messages = messages
+    // ✅ STEP 1: Mark all messages as read on the server
+    await axios.post(`/api/conversations/${conv.id}/read`, {}, { headers });
 
-    // Calculate read/unread counts
-    const readCount = messages.filter(msg => msg.read).length
-    const unreadCount = messages.length - readCount
+    // ✅ STEP 2: Now load messages
+    const res = await axios.get(`/api/conversations/${conv.id}/messages`, { headers });
+    const messages = res.data;
 
-    currentConversation.value.readCount = readCount
-    currentConversation.value.unreadCount = unreadCount
+    // Update messages
+    currentConversation.value.messages = messages;
 
-    await nextTick()
-    smoothScrollToBottom()
+    // Recalculate unread (though backend should mark all as read)
+    const unreadCount = messages.filter(msg => !msg.is_read).length;
+    currentConversation.value.unreadCount = unreadCount;
+
+    // ✅ STEP 3: Ensure the conversation in the sidebar list has 0 unread
+    const existingConv = conversations.value.find(c => c.id === conv.id);
+    if (existingConv) {
+      existingConv.unread_count = 0;
+    }
+
+    await nextTick();
+    smoothScrollToBottom();
   } catch (e) {
-    console.error('Failed to load messages', e)
+    console.error('Failed to load messages or mark as read', e);
+    showStatus('Failed to load conversation.', 'error');
   } finally {
-    loadingMessages.value = false
+    loadingMessages.value = false;
   }
-}
+};
 
 const sendMessage = async () => {
   if ((!newMessage.value.trim() && !selectedFile.value) || !currentConversation.value) return
-  
+
   const tempMessageText = newMessage.value.trim()
+
+  // Get reply context if available
+  const replyContext = replyMessage.value
+    ? {
+        reply_to_message_id: replyMessage.value.id,
+        reply_to_sender_name: replyMessage.value.sender,
+        reply_to_message_text: replyMessage.value.text
+      }
+    : null
+
   const msg = {
     id: Date.now(),
     message_text: tempMessageText,
     sender_id: userId.value,
     created_at: new Date().toISOString(),
-    attachment_url: selectedFile.value ? URL.createObjectURL(selectedFile.value) : null
+    attachment_url: selectedFile.value ? URL.createObjectURL(selectedFile.value) : null,
+    // ✅ Attach full reply context for display
+    reply_to_message_id: replyContext?.reply_to_message_id || null,
+    reply_to_sender_name: replyContext?.reply_to_sender_name || null,
+    reply_to_message_text: replyContext?.reply_to_message_text || null
   }
-  
+
   currentConversation.value.messages.push(msg)
-  console.log('👉 Sending message from:', msg.sender_id)
-  console.log('👉 Current user ID:', userId.value)
-  console.log('👉 Are they equal?', msg.sender_id === userId.value)
-  console.log('👉 Message object:', msg)
-  
+
+  // ✅ Clear floating reply bar
+  replyMessage.value = null
+
   // Reset input
   newMessage.value = ''
   selectedFile.value = null
-  
+
   try {
     const token = localStorage.getItem('token')
     const formData = new FormData()
     formData.append('conversation_id', currentConversation.value.id)
     formData.append('message_text', tempMessageText)
-    
+
+    // Optional: send reply_to_message_id to backend if needed
+    if (replyContext?.reply_to_message_id) {
+      formData.append('reply_to_message_id', replyContext.reply_to_message_id)
+    }
+
     if (selectedFile.value) {
       formData.append('attachment', selectedFile.value)
     }
-    
+
     const res = await axios.post(
       '/api/messages',
       formData,
@@ -1257,6 +1490,7 @@ const sendMessage = async () => {
         } 
       }
     )
+
     Object.assign(msg, res.data)
     await loadConversations()
     scrollToBottom()
@@ -1264,6 +1498,7 @@ const sendMessage = async () => {
     console.error('Failed to send message', e)
   }
 }
+
 
 // --- Smooth Scrolling Logic
 const smoothScrollToBottom = async () => {
@@ -1282,6 +1517,30 @@ watch(
   () => currentConversation.value?.messages?.length,
   () => smoothScrollToBottom()
 )
+
+// Delete an entire conversation
+const deleteConversation = async (conversationId) => {
+  showConfirm('Are you sure you want to delete this conversation?', async () => {
+    try {
+      await axios.delete(`/api/conversations/${conversationId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+
+      // Remove from local list
+      conversations.value = conversations.value.filter(conv => conv.id !== conversationId);
+
+      // If currently viewing this conversation, clear it
+      if (currentConversation.value?.id === conversationId) {
+        currentConversation.value = null;
+      }
+
+      showNotifications('Conversation deleted.', 'success');
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
+      showNotifications('Failed to delete conversation.', 'error');
+    }
+  });
+};
 
 const groupedMessages = computed(() => {
   if (!currentConversation.value?.messages?.length) return []
@@ -1312,117 +1571,120 @@ onMounted(() => {
   loadConversations()
 })
 
-// ✅ Alias for use in template (must come AFTER declaration)
-const getAvatar = getConversationAvatar
-
-
-
+// ✅ Unified payment processing state (use ONE name)
+const paymentProcessing = ref(false);
 const paymentError = ref(null);
-const paymentProcessing = ref(false); // ✅ Define it here
+const fullAddress = ref('');
+const selectedPaymentMethod = ref('card'); // ← Add this ref if not already present
 
+
+// ✅ Load Stripe
 const stripePromise = loadStripe('pk_test_51RpdA0H7s9nJbI2dsiOJmgCJkE0Z6TgQhv7eThKVDPjTxqSmzHWXMetbcUwYUFZGSuvi47TTCMvwOGRXAGGKpq9700BGtC5EvM');
 
-// Enhanced payment function
-const payWithStripe = async () => {
-  if (!totalCartValue.value || totalCartValue.value <= 0) {
-    paymentError.value = 'Cart total must be greater than 0.';
+
+
+const deliveryMethod = ref(''); // will be 'delivery' or 'pickup'
+
+
+const processPayment = async () => {
+  // 1. Validate delivery info
+  if (!fullAddress.value?.trim()) {
+    paymentError.value = 'Please enter your full delivery address.';
     return;
   }
-
-  paymentProcessing.value = true;
+  if (!deliveryMethod.value || !['delivery', 'pickup'].includes(deliveryMethod.value)) {
+    paymentError.value = 'Please select a valid delivery method.';
+    return;
+  }
   paymentError.value = null;
+  paymentProcessing.value = true;
 
   try {
-    const orderResponse = await axios.post(
-      '/api/checkout',
-      {},
-      {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    if (selectedPaymentMethod.value === 'card') {
+      // --- STRIPE PAYMENT WITH SPLIT ---
+      const orderResponse = await axios.post(
+        '/api/checkout',
+        {
+          full_address: fullAddress.value.trim(),
+          delivery_method: deliveryMethod.value, // ✅ now 'delivery' or 'pickup'
+          payment_method: 'card'
+        },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+      );
+
+      // Create Stripe session with split
+      const sessionResponse = await axios.post(
+        '/api/create-checkout-session',
+        {
+          order_id: orderResponse.data.order_id
+        },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+      );
+
+      const stripe = await stripePromise;
+      const { error } = await stripe.redirectToCheckout({
+        sessionId: sessionResponse.data.sessionId
+      });
+      if (error) {
+        paymentError.value = error.message;
       }
-    );
-
-    const response = await axios.post(
-      '/api/create-checkout-session',
-      {
-        order_id: orderResponse.data.order_id,
-        amount: Math.round(totalCartValue.value * 100),
-        currency: 'TRY'
-      }
-    );
-
-    const stripe = await stripePromise;
-    const { error } = await stripe.redirectToCheckout({
-      sessionId: response.data.sessionId
-    });
-
-    if (error) {
-      paymentError.value = error.message;
+    } else if (selectedPaymentMethod.value === 'cod') {
+      // --- CASH ON DELIVERY ---
+      await axios.post(
+        '/api/checkout',
+        {
+          full_address: fullAddress.value.trim(),
+          delivery_method: deliveryMethod.value,
+          payment_method: 'cod'
+        },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+      );
+      showNotifications('✅ Order placed successfully! You will pay on delivery.');
+      section.value = 'orders';
+      await fetchOrders();
     }
   } catch (err) {
     console.error('Payment error:', err);
-    paymentError.value = err.response?.data?.message || 'Payment failed. Please try again.';
+    paymentError.value =
+      err.response?.data?.errors?.delivery_method?.[0] ||
+      err.response?.data?.message ||
+      'An unexpected error occurred. Please try again.';
   } finally {
     paymentProcessing.value = false;
   }
 };
 
+// Existing payOrder function (unchanged)
 const payOrder = async (order) => {
   try {
-    // Create Stripe session on backend
     const res = await axios.post(
       '/api/create-checkout-session',
       { order_id: order.id },
       { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
     );
-
     const stripe = await stripePromise;
-
-    // Redirect to Stripe checkout page
     await stripe.redirectToCheckout({ sessionId: res.data.sessionId });
   } catch (err) {
     console.error('Payment error:', err);
-    alert('Payment failed. Please try again.');
+    showNotifications('Payment failed. Please try again.');
   }
 };
 
 const deleteOrder = async (orderId) => {
-  if (!confirm('Are you sure you want to delete this order?')) return;
-
-  try {
-    const token = localStorage.getItem('token');
-
-  await axios.delete(`/api/orders/${orderId}`, {
-  headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-});
-
-    await fetchOrders(); // Refresh orders after deletion
-    alert('Order deleted successfully.');
-  } catch (err) {
-    console.error('Failed to delete order:', err);
-    alert('Failed to delete order.');
-  }
-  
+  console.log("Deleting order ID:", orderId); // 🔍 ADD THIS
+  showConfirm('Are you sure you want to delete this order?', async () => {
+    try {
+      await axios.delete(`/api/orders/${orderId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      await fetchOrders();
+      showNotifications('Order deleted successfully.', 'success');
+    } catch (err) {
+      console.error('Failed to delete order:', err);
+      showNotifications('Failed to delete order.', 'error');
+    }
+  });
 };
-// Add this with your other refs
-const units = ref([]);
-
-// Add this to your onMounted or initialization function
-const fetchUnits = async () => {
-  try {
-    const res = await axios.get('/api/units');
-    units.value = res.data;
-  } catch (err) {
-    console.error('Failed to fetch units:', err);
-  }
-};
-
-// Call it in your onMounted
-onMounted(async () => {
-  // ... existing code
-  await fetchUnits();
-});
-
-
 
 // UI State
 const loading = ref(false)
@@ -1431,7 +1693,6 @@ const isLoadingProfile = ref(true)
 const settingsOpen = ref(false)
 const profileModalOpen = ref(false)
 const profilePictureUrl = ref('')
-const defaultAvatar = '/default-avatar.png' // Path to your default avatar image
 
 // User data
 const userProfile = ref({
@@ -1461,7 +1722,7 @@ const closeProfile = () => {
 
 const onProfileUpdated = (updatedUser) => {
   userProfile.value = updatedUser
-  profilePictureUrl.value = updatedUser.avatar || defaultAvatar
+  profilePictureUrl.value = updatedUser.avatar_url || defaultAvatar
   closeProfile()
 }
 
@@ -1547,7 +1808,7 @@ const handleLogout = async () => {
     localStorage.removeItem('token')
     router.push('/login')
   } catch {
-    alert('Logout failed.')
+    showConfirm('Logout failed.')
   }
 }
 
@@ -1646,7 +1907,7 @@ const editedComments = reactive({});
 function getToken() {
   const token = localStorage.getItem("token");
   if (!token) {
-    alert("Please log in first.");
+    showNotifications("Please log in first.");
     throw new Error("No token found");
   }
   return token;
@@ -1700,7 +1961,7 @@ const submitReview = async (productId) => {
     }
   } catch (err) {
     console.error("Error submitting review:", err);
-    alert("An error occurred. Please try again.");
+    showNotifications("An error occurred. Please try again.");
   }
 };
 
@@ -1764,7 +2025,7 @@ const fetchAllReviews = async () => {
 // ✅ Start editing a review
 function startEdit(index) {
   if (submittedReviews.value[index].reply) {
-    alert("❌ You cannot edit this review because the farmer has already replied.");
+    showNotifications("❌ You cannot edit this review because the farmer has already replied.");
     return;
   }
 
@@ -1804,7 +2065,7 @@ async function saveEdit(index, reviewId) {
       }
     );
 
-    alert("✅ Review updated successfully.");
+    showNotifications("✅ Review updated successfully.");
     submittedReviews.value[index].rating = payload.rating;
     submittedReviews.value[index].comment = payload.comment;
     cancelEdit(index);
@@ -1816,33 +2077,31 @@ async function saveEdit(index, reviewId) {
     const msg = error.response?.data?.message || "Unknown error";
 
     if (status === 403) {
-      alert("🔒 You can't edit this review (permission denied).");
+      showNotifications("🔒 You can't edit this review (permission denied).");
     } else if (status === 404) {
-      alert("❌ Review not found.");
+      showNotifications("❌ Review not found.");
     } else {
-      alert(`❌ Update failed: ${msg}`);
+      showNotifications(`❌ Update failed: ${msg}`);
     }
   }
 }
 
 // ✅ Fetch reviews on component mount
 onMounted(() => {
+   // ✅ Check if user just returned from Stripe Checkout
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('session_id')) {
+    // Clear the URL param to avoid re-triggering
+    router.replace({ query: {} });
+    // ✅ REFRESH ORDERS AFTER PAYMENT
+    fetchOrders();
+  }
   fetchReviews();
   fetchAllReviews();
 });
 
 
-const availableUnits = ref([]);
-const selectedUnits = ref({});
 
-onMounted(async () => {
-  try {
-    const res = await axios.get("/api/units");
-    availableUnits.value = res.data; // ✅ same as other dashboard
-  } catch (error) {
-    console.error("Failed to load units", error);
-  }
-});
 
 // Cart & Orders
 const cart = ref([])
@@ -1917,29 +2176,25 @@ function formatDate(dateStr) {
   const d = new Date(dateStr);
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
-
-
 const fetchOrders = async () => {
   loading.value = true;
   try {
     const token = localStorage.getItem('token');
-
     const response = await axios.get('/api/orders', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` }
     });
 
     orders.value = response.data.data.map(order => ({
-      id: order.order_id,
-      created_at: order.order_date, // formatted date string from backend
-      total: order.total_price,
-      status: order.status.toLowerCase(), // lowercase to match CSS classes
-      items: order.items.map(item => ({
+      id: order.order_id,        // ✅ This is actually the real DB ID (31)
+      displayId: `ORD-${order.order_id}`, // or just order.order_id if you prefer
+      created_at: order.order_date,
+      total: parseFloat(order.total_price) || 0,
+      status: order.status.toLowerCase(),
+      items: (order.items || []).map(item => ({
         product: { name: item.product_name },
         quantity: item.quantity,
-        price: item.price_each,
-      })),
+        price: parseFloat(item.price_each) || 0
+      }))
     }));
   } catch (error) {
     console.error('Failed to fetch orders:', error);
@@ -1955,6 +2210,10 @@ onMounted(() => {
   }
 });
 
+// Shows number of distinct products in cart (not total quantity)
+const cartItemCount = computed(() => {
+  return cart.value.length; // ✅ Each item in cart = 1 product
+});
 
 const addToCart = async (product) => {
   const quantity = quantities.value[product.id];
@@ -1962,11 +2221,11 @@ const addToCart = async (product) => {
 
   // Validation
   if (!quantity || quantity < 1) {
-    alert("Please enter a valid quantity.");
+    showNotifications("Please enter a valid quantity.");
     return;
   }
   if (!unit) {
-    alert("Please select a unit.");
+    showNotifications("Please select a unit.");
     return;
   }
 
@@ -1987,7 +2246,7 @@ const addToCart = async (product) => {
     }
 
     // Optional: Show feedback
-    alert(`${quantity} ${unit} of ${product.name} added to cart!`);
+    showNotifications(`${quantity} ${unit} of ${product.name} added to cart!`);
 
     // Reset input
     quantities.value[product.id] = 0;
@@ -2002,15 +2261,24 @@ const addToCart = async (product) => {
 
 
 const removeFromCart = async (productId) => {
-  const item = cart.value.find(i => i.product_id === productId)
-  if (!item) return alert('Not in cart')
-  try {
-    await axios.delete(`/api/consumer/cart/${item.id}`)
-    await fetchCart()
-  } catch (err) {
-    globalError.value = handleApiError(err, 'Remove from cart')
+  const item = cart.value.find(i => i.product_id === productId);
+  if (!item) {
+    showNotifications('Item not found in cart.', 'error');
+    return;
   }
-}
+
+  // Show custom confirmation modal
+  showConfirm('Are you sure you want to remove this item from your cart?', async () => {
+    try {
+      await axios.delete(`/api/consumer/cart/${item.id}`);
+      await fetchCart();
+      showNotifications('Item removed from cart.', 'success');
+    } catch (err) {
+      globalError.value = handleApiError(err, 'Remove from cart');
+      showNotifications('Failed to remove item.', 'error');
+    }
+  });
+};
 
 const updateCartQuantity = async (productId, newQty) => {
   if (newQty < 1) return await removeFromCart(productId)
@@ -2025,14 +2293,18 @@ const updateCartQuantity = async (productId, newQty) => {
 }
 
 const clearCart = async () => {
-  if (!confirm('Clear entire cart?')) return
-  try {
-axios.delete('http://127.0.0.1:8000/api/consumer/cart/clear')
-    cart.value = []
-  } catch (err) {
-    globalError.value = handleApiError(err, 'Clear cart')
-  }
-}
+  showConfirm('Clear entire cart?', async () => {
+    try {
+      await axios.delete('/api/consumer/cart/clear'); // ✅ Relative path
+      cart.value = [];
+      showNotifications('Cart cleared successfully.', 'success');
+    } catch (err) {
+      console.error('Clear cart error:', err);
+      globalError.value = handleApiError(err, 'Clear cart');
+    }
+  });
+};
+
 
 const totalCartValue = computed(() => {
   return cart.value.reduce((sum, item) => {
@@ -2073,6 +2345,8 @@ onMounted(async () => {
   await fetchOrders()
   await fetchCartTotal()
   await fetchCategories()
+  await fetchUnits() // ✅ Only call once here
+
 })
 
 // Computed properties for dashboard
@@ -2121,6 +2395,34 @@ const featuredProducts = computed(() => {
 const goToProduct = (product) => {
   router.push(`/product/${product.id}`)
 }
+
+// --- EARLY REFS ---
+const units = ref([]);
+const availableUnits = ref([]);
+const selectedUnits = ref({});
+
+// ✅ DEFINE fetchUnits EARLY
+const fetchUnits = async () => {
+  try {
+    const res = await axios.get('/api/units');
+    units.value = res.data;
+    availableUnits.value = res.data;
+  } catch (err) {
+    console.error('Failed to fetch units:', err);
+  }
+};
+// Deduplicated list for display
+const uniqueAvailableUnits = computed(() => {
+  const seen = new Set();
+  return availableUnits.value.filter(unit => {
+    const key = `${unit.name}-${unit.abbreviation}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+});
 
 </script>
 
@@ -2218,16 +2520,6 @@ const goToProduct = (product) => {
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid #e2e8f0;
-}
-
-.profile-avatar.placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #4e8c4da2;
-  color: white;
-  font-weight: bold;
-  font-size: 1.5rem;
 }
 
 .settings-menu {
@@ -2454,55 +2746,76 @@ const goToProduct = (product) => {
       font-weight: 500;
       color: #444;
      }
-
-
+/* --- Quantity + Unit + Add to Cart (Responsive) --- */
 .quantity-cart {
   display: flex;
-  align-items: center;
-  gap: 5px;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-top: 10px;
+  width: 100%;
 }
 
-.quantity-cart input {
-  width: 47px;
-  padding: 8px 5px;
+/* Quantity Input */
+.quantity-cart input[type="number"] {
+  flex: 1;
+  min-width: 60px;
+  padding: 8px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 10x;
+  font-size: 14px;
+  text-align: center;
 }
 
+/* Unit Select */
 .quantity-cart select {
-  padding: 10px 0px;
+  flex: 2;
+  min-width: 100px;
+  padding: 8px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 10px;
+  font-size: 14px;
   background-color: white;
   cursor: pointer;
-  transition: 0.2s ease;
-    width: 56px;
-
-
 }
 
-.quantity-cart select:hover {
-  border-color: #38bff8;
-}
-
+/* Add to Cart Button */
 .quantity-cart button {
+  flex: 1;
+  min-width: 100px;
+  padding: 8px;
   background-color: #2563eb;
   color: white;
-  padding: 10px 55px;
   border: none;
   border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  font-size: 12px;
-  transition: background-color 0.2s ease;
-
+  white-space: nowrap;
+  text-align: center;
 }
 
-.quantity-cart button:hover {
-  background-color: #1d4ed8;
+/* On very small screens (e.g., iPhone SE) */
+@media (max-width: 480px) {
+  .quantity-cart {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .quantity-cart input,
+  .quantity-cart select,
+  .quantity-cart button {
+    width: 100%;
+    min-width: auto;
+    flex: none;
+  }
+
+  .quantity-cart button {
+    padding: 10px;
+    font-size: 16px;
+  }
 }
+
 
 .message-farmer-btn {
   margin-top: 12px;
@@ -2738,7 +3051,7 @@ const goToProduct = (product) => {
             font-size: 16px;
             font-weight: 500;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 10.2s;
         }
 
         .continue-shopping-btn:hover {
@@ -2870,27 +3183,27 @@ const goToProduct = (product) => {
         .quantity-selector {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 0px;
         }
 
         .quantity-selector label {
-            font-size: 14px;
+            font-size: 12px;
             color: #111827;
-            font-weight: 500;
+            font-weight: 100;
         }
 
         .quantity-controls {
             display: flex;
             align-items: center;
             border: 1px solid #d1d5db;
-            border-radius: 6px;
+            border-radius: 2px;
             background: white;
         }
 
         .qty-btn {
             background: none;
             border: none;
-            padding: 10px 8px;
+            padding: 4px 2px;
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -2910,10 +3223,10 @@ const goToProduct = (product) => {
 
         .qty-input {
             border: none;
-            width: 50px;
+            width: 45px;
             text-align: center;
-            padding: 8px 8px;
-            font-size: 14px;
+            padding: 6px 6px;
+            font-size: 8px;
             background: none;
             outline: none;
         }
@@ -3079,51 +3392,183 @@ const goToProduct = (product) => {
   background: #ef4444;
   color: white;
   border: none;
-  padding: 0.4rem 1rem;
-  border-radius: 6px;
-  margin-top: 6px;
+  padding: 0rem 0rem;
+  border-radius: 0px;
+  margin-top: 0px;
   cursor: pointer;
-  width: 20%;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.61);
+  width: 10%;
 
 }
 .remove-btn:hover {
   background: #dc2626;
 }
 
-.payment-section {
-    background: #ffffff;
-    border-radius: 0 0 12px 12px; /* Only bottom corners rounded */
-    padding: 2rem;
-    max-width: 500px;
-    margin: 0 auto; /* Remove top margin */
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 10px 15px rgba(0, 0, 0, 0.1);
-    border: 1px solid #e2e8f0;
-    border-top: none; /* Remove top border */
-    position: fixed; /* Make it stick to top */
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%); /* Center horizontally */
-    z-index: 1000; /* Ensure it stays on top */
-    width: 100%;
-    max-width: 500px;
+/* Responsive Remove Button */
+.remove-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 0rem 0rem; /* More touch-friendly on mobile */
+  border-radius: 4px; /* Slightly rounded for better UX */
+  cursor: pointer;
+  width: auto; /* Don’t force 20%—use natural width or max-content */
+  min-width: 40px; /* Ensure it’s tappable on mobile */
+  font-size: 0.85rem; /* ~14px — readable on small screens */
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); /* Slightly softer shadow */
+  transition: background 0.2s ease, transform 0.1s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
+.remove-btn:hover {
+  background: #dc2626;
+}
+
+/* Better mobile tap feedback */
+.remove-btn:active {
+  transform: scale(0.96);
+}
+
+/* Optional: If you *must* limit width on small screens */
+@media (max-width: 480px) {
+  .remove-btn {
+    padding: 0.3rem 0.1rem;
+    font-size: 0.9rem;
+    min-width: 40px;
+  }
+}
+
+/* If used inside a flex/grid container, this prevents overflow */
+.remove-btn {
+  flex-shrink: 0;
+}
+
+/* ✅ CLEAN PAYMENT SECTION — JUST BELOW HEADER */
 .payment-section {
-    background: #ffffff;
-    border-radius: 12px; /* All corners rounded since it's not at very top */
-    padding: 2rem;
-    max-width: 500px;
-    margin: 0 auto;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 10px 15px rgba(0, 0, 0, 0.1);
-    border: 1px solid #e2e8f0;
-    position: fixed;
-    top: 100px; /* ADJUST THIS VALUE - Distance from top of viewport */
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1000;
-    width: 100%;
-    max-width: 500px;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 500px;
+  margin:2rem auto 3rem; /* No top margin — flows naturally after header */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  width: 100%;
+}
+.payment-section h2 {
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 1.5rem;
+}
+
+/* Delivery Info */
+.delivery-info label {
+  display: block;
+  margin: 1.25rem 0 0.5rem;
+  font-weight: 600;
+  color: #374151;
+}
+.address-input,
+.delivery-select {
+  width: 100%;
+  padding: 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 1rem;
+  background: #ffffff;
+  transition: all 0.2s;
+}
+.address-input:focus,
+.delivery-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Order Summary */
+.order-summary {
+  margin: 1.5rem 0;
+  padding-top: 1.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+.order-summary h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 1rem;
+}
+.summary-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1rem;
+  color: #475569;
+}
+.summary-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  color: #1e293b;
+}
+
+/* Payment Methods */
+.payment-methods h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 1.5rem 0 1rem;
+}
+
+/* Buttons & Errors */
+.stripe-pay-button,
+.pay-btn {
+  width: 100%;
+  padding: 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.stripe-pay-button:hover,
+.pay-btn:hover {
+  background: #2563eb;
+}
+.stripe-pay-button:disabled,
+.pay-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.payment-error {
+  background: #fee2e2;
+  color: #b91c1c;
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  text-align: center;
+  font-weight: 500;
+}
+
+.payment-processing {
+  text-align: center;
+  color: #3b82f6;
+  font-weight: 500;
+  margin-top: 0.5rem;
 }
 
 /* Different positioning options - use one of these: */
@@ -3277,27 +3722,27 @@ body.payment-active {
     }
 }
 
-
 /* Disable main scroll when in messages */
 .main-view {
+  padding: 2rem;
+  padding-bottom: 80px;
   overflow-y: auto;
   flex: 1;
-  padding: 2rem;
-  padding-bottom: 5rem;
 }
 
 .main-view.messages-active {
   overflow: hidden;
 }
-/* MESSAGING LAYOUT - Light Theme */
+
+/* MESSAGING LAYOUT - Light Green & White Theme */
 .messaging-section {
   position: fixed;
-    width: 100%;
-  top: 58px; /* height of header */
-  bottom: 80px; /* height of bottom nav */
+  width: 100%;
+  top: 58px;
+  bottom: 80px;
   left: 0;
   right: 0;
-  background: #f9fafb;
+  background: #f0fdf4; /* Light green background */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -3311,9 +3756,9 @@ body.payment-active {
   width: 100%;
   height: 85vh;
   background: #ffffff;
-  border-radius: 16px;
+  border-radius: 0; /* Removed rounded corners */
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  box-shadow: none; /* Removed shadow */
   margin-top: 60px;
 }
 
@@ -3321,16 +3766,16 @@ body.payment-active {
 .conversation-list {
   width: 25%;
   background: #ffffff;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid #dcfce7; /* Light green border */
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: #1f2937;
+  color: #166534;
 }
 
 .conversation-header {
   padding: 18px 16px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid #dcfce7;
   flex-shrink: 0;
   display: flex;
   justify-content: space-between;
@@ -3341,29 +3786,29 @@ body.payment-active {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: #111827;
+  color: #166534;
 }
 
 .search-box {
-  width: 100%;
+  width: 75%;
   padding: 12px 16px;
-  border-radius: 12px;
-  border: 1px solid #d1d5db;
+  border-radius: 0; /* Removed rounded corners */
+  border: 1px solid #bbf7d0;
   background: #ffffff;
-  color: #111827;
+  color: #166534;
   font-size: 0.9rem;
   box-sizing: border-box;
   transition: all 0.2s ease;
 }
 
 .search-box::placeholder {
-  color: #9ca3af;
+  color: #86efac;
 }
 
 .search-box:focus {
   outline: none;
   border-color: #22c55e;
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+  box-shadow: none; /* Removed shadow */
 }
 
 .conversation-items {
@@ -3380,17 +3825,17 @@ body.payment-active {
   gap: 12px;
   padding: 12px 16px;
   cursor: pointer;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid #f0fdf4;
   transition: all 0.2s ease;
   position: relative;
 }
 
 .conversation:hover {
-  background: #f9fafb;
+  background: #f0fdf4;
 }
 
 .conversation.active {
-  background: #f0fdf4;
+  background: #dcfce7;
   border-left: 3px solid #22c55e;
 }
 
@@ -3399,7 +3844,7 @@ body.payment-active {
   height: 44px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #dcfce7;
 }
 
 .info {
@@ -3418,7 +3863,7 @@ body.payment-active {
 .info .top strong {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #111827;
+  color: #166534;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3426,13 +3871,13 @@ body.payment-active {
 
 .info .top small {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: #86efac;
   flex-shrink: 0;
 }
 
 .last {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: #4ade80;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3444,21 +3889,21 @@ body.payment-active {
   color: white;
   font-size: 0.7rem;
   padding: 3px 8px;
-  border-radius: 12px;
+  border-radius: 0; /* Removed rounded corners */
   font-weight: 600;
   flex-shrink: 0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
 }
 
-/* CHAT AREA */
 .chat-area {
-  width: 80%;
+  width: 75%;
   display: flex;
   flex-direction: column;
   background: #ffffff;
   height: 100%;
   position: relative;
-  color: #111827;
+  color: #166534;
+  padding-bottom: 70px;
 }
 
 .chat-header {
@@ -3467,7 +3912,7 @@ body.payment-active {
   gap: 14px;
   background: #ffffff;
   padding: 14px 20px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid #dcfce7;
   flex-shrink: 0;
   position: sticky;
   top: 0;
@@ -3478,12 +3923,12 @@ body.payment-active {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #dcfce7;
+  box-shadow: none;
 }
 
 .chat-header h4 {
-  color: #111827;
+  color: #166534;
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
@@ -3494,7 +3939,7 @@ body.payment-active {
 }
 
 .chat-header small {
-  color: #6b7280;
+  color: #4ade80;
   font-size: 0.85rem;
   font-weight: 500;
 }
@@ -3511,6 +3956,39 @@ body.payment-active {
   max-height: calc(100vh - 300px);
   position: relative;
   z-index: 5;
+}
+
+.messages-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-behavior: smooth;
+}
+
+.reply-indicator {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 0; /* Removed rounded corners */
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: none;
+  margin: 0 24px 8px 24px;
+  max-width: calc(100% - 48px);
+  max-height: 80px;
+  overflow: hidden;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+  .messaging-section {
+    bottom: 90px;
+  }
 }
 
 /* DATE HEADER */
@@ -3532,21 +4010,21 @@ body.payment-active {
   left: 0;
   width: 100%;
   height: 1px;
-  background: linear-gradient(to right, transparent, #e5e7eb, transparent);
+  background: linear-gradient(to right, transparent, #dcfce7, transparent);
   z-index: 1;
 }
 
 .date-header span {
-  background-color: #f9fafb;
+  background-color: #f0fdf4;
   padding: 8px 20px;
-  border-radius: 16px;
+  border-radius: 0; /* Removed rounded corners */
   font-size: 0.85rem;
-  color: #6b7280;
+  color: #4ade80;
   font-weight: 500;
   position: relative;
   z-index: 2;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
-  border: 1px solid #f3f4f6;
+  box-shadow: none;
+  border: 1px solid #dcfce7;
 }
 
 /* MESSAGE STYLING */
@@ -3587,23 +4065,37 @@ body.payment-active {
   margin-bottom: 0;
 }
 
+.bubble {
+  position: relative;
+  max-width: 100%;
+  margin-bottom: 0;
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  word-wrap: break-word;
+  border-radius: 0; /* Removed rounded corners */
+  background: #22c55e;
+  color: #fff;
+  box-shadow: none;
+}
+
 .message.sent .bubble {
   background: #22c55e;
   color: #ffffff;
-  border-radius: 16px 16px 4px 16px;
+  border-radius: 0; /* Removed rounded corners */
   padding: 12px 16px;
-  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.2);
+  box-shadow: none;
   font-size: 0.95rem;
   line-height: 1.4;
   word-wrap: break-word;
 }
 
 .message.received .bubble {
-  background: #f3f4f6;
-  color: #111827;
-  border-radius: 16px 16px 16px 4px;
+  background: #f0fdf4;
+  color: #166534;
+  border-radius: 0; /* Removed rounded corners */
   padding: 12px 16px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: none;
   font-size: 0.95rem;
   line-height: 1.4;
   word-wrap: break-word;
@@ -3613,7 +4105,7 @@ body.payment-active {
   display: block;
   text-align: right;
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: #86efac;
   margin-top: 6px;
   font-weight: 500;
 }
@@ -3623,7 +4115,7 @@ body.payment-active {
 }
 
 .message.received .timestamp {
-  color: #9ca3af;
+  color: #86efac;
   text-align: left;
 }
 
@@ -3641,38 +4133,23 @@ body.payment-active {
 .attached-image {
   max-width: 180px;
   max-height: 180px;
-  border-radius: 12px;
+  border-radius: 0; /* Removed rounded corners */
   object-fit: cover;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-}
-
-.attachment-preview {
-  margin-top: 8px;
-  max-width: 100%;
-}
-
-.attached-image {
-  max-width: 180px;
-  max-height: 180px;
-  border-radius: 12px;
-  object-fit: cover;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  border: 1px solid #dcfce7;
 }
 
 .file-attachment {
-  background: #1e293b;
-  color: #94a3b8;
+  background: #f0fdf4;
+  color: #166534;
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: 0; /* Removed rounded corners */
   font-size: 0.85rem;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #dcfce7;
 }
-
 
 .message-options {
   position: absolute;
@@ -3682,7 +4159,7 @@ body.payment-active {
   font-size: 18px;
   opacity: 0;
   transition: opacity 0.2s ease;
-  color: #9ca3af;
+  color: #4ade80;
   z-index: 20;
   background: none;
   border: none;
@@ -3700,8 +4177,8 @@ body.payment-active {
 
 .message-options:hover {
   opacity: 1 !important;
-  background-color: #f3f4f6;
-  color: #4b5563;
+  background-color: #f0fdf4;
+  color: #22c55e;
 }
 
 .options-menu {
@@ -3709,9 +4186,9 @@ body.payment-active {
   top: 28px;
   right: 0;
   background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  border: 1px solid #dcfce7;
+  border-radius: 0; /* Removed rounded corners */
+  box-shadow: none;
   z-index: 1000;
   min-width: 140px;
   overflow: hidden;
@@ -3738,45 +4215,44 @@ body.payment-active {
   text-align: left;
   cursor: pointer;
   font-size: 0.9rem;
-  color: #111827;
+  color: #166534;
   transition: background 0.2s;
   font-weight: 500;
 }
 
 .options-menu button:hover {
-  background: #f9fafb;
-  color: #1f2937;
-}
-
-.options-menu button:first-child {
-  border-top-left-radius: 12px;
-  border-top-right-radius: 12px;
-}
-
-.options-menu button:last-child {
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
-}
-
-/* Reply indicator */
-.reply-indicator {
   background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 12px;
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  position: fixed;
-  bottom: 60px;
-  left: 24px;
-  right: 24px;
-  z-index: 15;
-  max-width: calc(100% - 48px);
-  margin: 0 24px 8px 24px;
-  max-height: 80px;
+  color: #22c55e;
+}
+
+.inline-reply-preview {
+  background: #f0fdf4;
+  border-left: 2px solid #22c55e;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  border-radius: 0; /* Removed rounded corners */
+  max-width: 100%;
+}
+
+.reply-label {
+  font-size: 0.75rem;
+  color: #22c55e;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 3px;
+}
+
+.reply-text {
+  font-size: 0.85rem;
+  color: #166534;
+  margin: 0;
+  line-height: 1.3;
+  font-style: italic;
   overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .reply-header {
@@ -3784,7 +4260,7 @@ body.payment-active {
   justify-content: space-between;
   align-items: center;
   font-size: 0.85rem;
-  color: #059669;
+  color: #22c55e;
   font-weight: 500;
 }
 
@@ -3797,9 +4273,9 @@ body.payment-active {
   border: none;
   font-size: 18px;
   cursor: pointer;
-  color: #9ca3af;
+  color: #86efac;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 0; /* Removed rounded corners */
   width: 24px;
   height: 24px;
   display: flex;
@@ -3808,15 +4284,15 @@ body.payment-active {
 }
 
 .cancel-reply:hover {
-  color: #111827;
-  background-color: #f3f4f6;
+  color: #22c55e;
+  background-color: #f0fdf4;
 }
 
 .reply-content {
   font-size: 0.9rem;
-  color: #111827;
+  color: #166534;
   padding: 4px 0;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid #dcfce7;
   margin-top: 2px;
   line-height: 1.4;
   overflow: hidden;
@@ -3824,63 +4300,89 @@ body.payment-active {
   white-space: nowrap;
 }
 
-/* INPUT ROW */
+.chat-window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
 .input-row {
   display: flex;
   align-items: center;
-  padding: 12px 24px;
+  padding: 16px 24px;
   background: #ffffff;
-  border-top: 1px solid #f3f4f6;
-  position: sticky;
-  bottom: 0;
+  border-top: 1px solid #dcfce7;
+  position: relative;
   z-index: 10;
   flex-shrink: 0;
+  min-height: 70px;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.input-tools button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #4ade80;
+  padding: 10px;
+  border-radius: 0; /* Removed rounded corners */
+  transition: background 0.2s, color 0.2s;
+}
+
+.input-tools button:hover {
+  background: #f0fdf4;
+  color: #22c55e;
 }
 
 .input-row input {
   flex: 1;
-  padding: 14px 20px;
-  border-radius: 24px;
-  border: 1px solid #d1d5db;
+  padding: 12px 14px;
+  border-radius: 0; /* Removed rounded corners */
+  border: 1px solid #bbf7d0;
   outline: none;
   background: #ffffff;
-  color: #111827;
-  font-size: 0.95rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  color: #166534;
+  font-size: 1rem;
+  line-height: 1.4;
+  box-shadow: none;
+  min-height: 48px;
 }
 
 .input-row input::placeholder {
-  color: #9ca3af;
+  color: #86efac;
 }
 
 .input-row input:focus {
   border-color: #22c55e;
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+  box-shadow: none;
 }
 
 .input-row button {
   background: #22c55e;
   color: white;
   border: none;
-  border-radius: 24px;
-  padding: 12px 20px;
-  margin-left: 12px;
+  border-radius: 0; /* Removed rounded corners */
+  padding: 14px 24px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.95rem;
-  transition: background 0.2s, transform 0.1s;
-  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  box-shadow: none;
+  min-height: 48px;
 }
 
 .input-row button:hover {
   background: #16a34a;
-  transform: translateY(-1px);
+  transform: none; /* Removed transform */
 }
 
 .input-row button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  background: #d1d5db;
+  background: #86efac;
 }
 
 /* Emoji Picker */
@@ -3888,11 +4390,11 @@ body.payment-active {
   position: absolute;
   bottom: 100px;
   left: 24px;
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #dcfce7;
+  border-radius: 0; /* Removed rounded corners */
   padding: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 10px;
@@ -3900,8 +4402,6 @@ body.payment-active {
   max-height: 180px;
   overflow-y: auto;
   z-index: 1000;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .emoji-option {
@@ -3909,29 +4409,123 @@ body.payment-active {
   cursor: pointer;
   font-size: 22px;
   padding: 6px;
-  border-radius: 12px;
+  border-radius: 0; /* Removed rounded corners */
   transition: background 0.2s;
 }
 
 .emoji-option:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: #f0fdf4;
 }
 
-/* File Picker Button */
-.input-tools button {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  color: #94a3b8;
-  padding: 8px;
+/* Mobile view */
+@media (max-width: 768px) {
+  .messaging-section {
+    position: fixed;
+    top: 60px;
+    bottom: 60px;
+    left: 0;
+    right: 0;
+    height: calc(90vh - 60px);
+    margin: 0;
+    padding: 0;
+  }
+
+  .messaging-container {
+    height: 100%;
+    border-radius: 0;
+    margin-top: 0;
+    flex-direction: column;
+    background: #ffffff;
+  }
+
+  .conversation-list {
+    width: 100% !important;
+    height: 100vh !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 20;
+    background: #ffffff;
+    border-right: none;
+    border-bottom: 1px solid #dcfce7;
+    transition: transform 0.3s ease;
+  }
+
+  .conversation-list.hidden {
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+
+  .chat-area {
+    width: 100% !important;
+    height: 90vh !important;
+    background: #ffffff;
+    position: relative;
+    z-index: 10;
+  }
+
+  .chat-header {
+    background: #ffffff;
+    border-bottom: 1px solid #dcfce7;
+  }
+
+  .back-button {
+    color: #22c55e;
+    font-weight: bold;
+  }
+
+  .messages {
+    max-height: calc(100vh - 220px);
+    padding: 12px;
+  }
+
+  .input-row {
+    padding: 12px;
+    background: #ffffff;
+    border-top: 1px solid #dcfce7;
+  }
+
+  .input-row input {
+    padding: 10px 16px;
+    font-size: 0.95rem;
+    border-radius: 0;
+  }
+
+  .input-row button {
+    padding: 10px 18px;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .conversation-list.mobile-hidden {
+    display: none;
+  }
+}
+
+
+/* Ensure modal appears above everything, even inside messaging section */
+.custom-confirm-overlay {
+  position: fixed; /* ← critical: not absolute */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000; /* above all messaging UI */
+}
+
+.custom-confirm-modal {
+  background: white;
+  padding: 1.5rem;
   border-radius: 12px;
-  transition: background 0.2s;
-}
-
-.input-tools button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f1f5f9;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  max-width: 300px;
+  width: 90%;
 }
 
 
@@ -4273,7 +4867,45 @@ body.payment-active {
   color: #718096;
   padding: 1rem;
 }
+/* Notification Toast */
+.notification {
+  position: fixed;
+  top: 80px; /* Below header (your header is ~58px + some padding) */
+  right: 20px;
+  z-index: 9999;
+  padding: 12px 20px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-width: 300px;
+  word-wrap: break-word;
+  animation: slideIn 0.3s ease forwards;
+}
 
+.notification.info {
+  background-color: #3b82f6; /* blue */
+}
+.notification.success {
+  background-color: #10b981; /* green */
+}
+.notification.error {
+  background-color: #ef4444; /* red */
+}
+.notification.warning {
+  background-color: #f59e0b; /* amber */
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
 
 /* Mobile Styles */
 @media (max-width: 768px) {
@@ -4308,138 +4940,7 @@ body.payment-active {
     grid-template-columns: 1fr; /* Force single column on small screens */
     gap: 1rem; /* Smaller gap */
   }
-/* ===== RESPONSIVE MESSAGING LAYOUT ===== */
 
-/* --- Mobile View (Small Screens) --- */
-@media (max-width: 768px) {
-  .messaging-section {
-    height: calc(100vh - 60px); /* Adjust for header height */
-    margin-top: 0;
-  }
-
-  .messaging-container {
-    height: 100%;
-    border-radius: 0; /* Remove rounded corners for full-screen feel */
-    box-shadow: none; /* Remove shadow for cleaner look */
-    margin-top: 0;
-  }
-
-  /* Stack sidebar and chat area vertically */
-  .messaging-container {
-    flex-direction: column;
-  }
-
-  /* Conversation List (Sidebar) */
-  .conversation-list {
-    width: 100%; /* Full width */
-    height: 40vh; /* Take 40% of viewport height */
-    border-right: none; /* Remove right border */
-    border-bottom: 1px solid #ddd; /* Add bottom border */
-    overflow-y: auto; /* Make scrollable */
-  }
-
-  .conversation-header {
-    padding: 15px;
-    border-bottom: 3px solid #ddd;
-  }
-
-  .search-box {
-    padding: 12px 15px;
-    margin-top: 8px;
-  }
-
-  .conversation-items {
-    padding: 10px;
-  }
-
-  .conversation {
-    padding: 12px;
-    gap: 8px;
-  }
-
-  .info {
-    font-size: 0.9rem; /* Slightly smaller text */
-  }
-
-  .info .top {
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .badge {
-    font-size: 0.6rem;
-    padding: 2px 5px;
-  }
-
-  /* Chat Area */
-  .chat-area {
-    width: 100%; /* Full width */
-    height: 60vh; /* Take 60% of viewport height */
-    background: #efeae2;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* Chat Header */
-  .chat-header {
-    padding: 12px 15px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-
-  .chat-header h4 {
-    font-size: 1rem; /* Smaller font */
-  }
-
-  /* Messages Area */
-  .messages {
-    max-height: calc(100vh - 220px); /* Adjust based on header + input height */
-    padding: 12px 15px;
-  }
-
-  .message {
-    max-width: 75%; /* Slightly wider bubbles for mobile */
-  }
-
-  /* Input Row */
-  .input-row {
-    padding: 12px 15px;
-    position: sticky;
-    bottom: 0;
-    z-index: 10;
-  }
-
-  .input-row input {
-    padding: 10px 12px;
-    font-size: 0.9rem;
-  }
-
-  .input-row button {
-    padding: 10px 15px;
-    font-size: 0.9rem;
-  }
-}
-
-/* --- Tablet View (Optional) --- */
-@media (min-width: 769px) and (max-width: 1024px) {
-  .messaging-container {
-    height: 80vh; /* Slightly shorter than desktop */
-  }
-
-  .conversation-list {
-    width: 25%; /* Wider sidebar for tablet */
-  }
-
-  .chat-area {
-    width: 75%; /* Narrower chat area */
-  }
-
-  .messages {
-    max-height: calc(100vh - 250px); /* Adjust for larger header/input */
-  }
-}
 
   /* Cart Layout */
   .cart-layout {
@@ -4610,5 +5111,145 @@ body.payment-active {
 }
 
 
+/* Confirmation Overlay & Modal */
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
 
+.confirm-box {
+  background: #fff;
+  padding: 10px;
+  border-radius: 10px;
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+  color: #333;
+}
+
+.confirm-box .actions {
+  margin-top: 15px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+.mobile-section-back-button {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 16px;
+  padding: 12px 16px;
+  color: #007bff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .mobile-section-back-button {
+    display: block;
+  }
+
+  /* Optionally, hide default header when back button is visible */
+  .conversation-header h3 {
+    margin-top: 0;
+  }
+}
+/* Custom Confirm Overlay */
+.custom-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.custom-confirm-modal {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  max-width: 320px;
+  width: 90%;
+  font-size: 1rem;
+  color: #1e293b;
+}
+
+.custom-confirm-modal p {
+  margin: 0 0 1.25rem;
+  line-height: 1.5;
+}
+
+/* Confirm Buttons */
+.confirm-buttons {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.confirm-buttons button {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.btn-cancel {
+  background-color: #ed0f0fff;
+  color: #64748b;
+}
+
+.btn-cancel:hover {
+  background-color: #e61a1aff;
+}
+
+.btn-confirm {
+  background-color: #1cf12eff; /* red for destructive action */
+  color: white;
+}
+
+.btn-confirm:hover {
+  background-color: #0aeb1dff;
+}
+
+/* Cart Tab Badge */
+.cart-tab-icon {
+  position: relative;
+  display: inline-block;
+}
+
+.cart-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background-color: #ef4444; /* red */
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
     </style>

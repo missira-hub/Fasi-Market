@@ -30,31 +30,40 @@ class MessageController extends Controller
         return response()->json($messages);
     }
 
-    // --- Send a message
-    public function store(Request $request)
-    {
-        $request->validate([
-            'conversation_id' => 'required|exists:conversations,id',
-            'message_text' => 'required|string'
-        ]);
+public function store(Request $request)
+{
+    $request->validate([
+        'conversation_id' => 'required|exists:conversations,id',
+        'message_text' => 'required|string',
+        'reply_to_message_id' => 'nullable|exists:messages,id',
+        'reply_to_sender_name' => 'nullable|string|max:255',
+        'reply_to_message_text' => 'nullable|string',
+        'attachment' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:10240',
+    ]);
 
-        $conversation = Conversation::findOrFail($request->conversation_id);
+    $message = new Message();
+    $message->conversation_id = $request->conversation_id;
+    $message->sender_id = auth()->id();
+    $message->message_text = $request->message_text;
 
-        if(!$conversation->participants()->where('user_id', auth()->id())->exists()){
-            return response()->json(['message'=>'Not a participant'],403);
-        }
-
-        $message = Message::create([
-            'conversation_id' => $conversation->id,
-            'sender_id' => auth()->id(),
-            'message_text' => $request->message_text,
-            'is_read' => false,
-        ]);
-
-        $message->load('sender');
-
-        return response()->json($message,201);
+    // Save reply context if provided
+    if ($request->filled('reply_to_message_id')) {
+        $message->reply_to_message_id = $request->reply_to_message_id;
+        $message->reply_to_sender_name = $request->reply_to_sender_name;
+        $message->reply_to_message_text = $request->reply_to_message_text;
     }
+
+    // Handle attachment if needed
+    if ($request->hasFile('attachment')) {
+        $message->attachment_url = $request->file('attachment')->store('messages', 'public');
+    }
+
+    $message->save();
+    
+
+    // Return full message with reply data
+    return response()->json($message, 201);
+}
 
     // --- Delete a message
     public function destroy($id)

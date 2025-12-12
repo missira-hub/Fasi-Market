@@ -23,24 +23,31 @@
     </aside>
     <!-- Main Content Area -->
     <div class="main-wrapper" :style="{ marginLeft: sidebarHidden ? '0' : '250px' }">
-      <!-- Dashboard Header (Sticky) -->
-      <header class="dashboard-header">
-        <!-- Add a hamburger menu button here if needed -->
-        <button @click="toggleSidebar" class="hamburger-icon">☰</button>
-        <div class="greeting">
-          <h2>👋 Hello, {{ currentUser?.name || 'Farmer' }}</h2>
-          <p>Welcome back to your dashboard</p>
-        </div>
-        <div class="user-profile" @click="openProfileModal" title="Click to update your profile">
-          <img
-            v-if="currentUser?.avatar_url"
-            :src="currentUser.avatar_url"
-            alt="Profile"
-            class="profile-picture clickable"
-          />
-          <div v-else class="profile-picture placeholder">👤</div>
-        </div>
-      </header>
+
+    <!-- Dashboard Header (Sticky) -->
+<header class="dashboard-header">
+  <button @click="toggleSidebar" class="hamburger-icon">☰</button>
+  <div class="greeting">
+    <h2>Hello, {{ currentUser?.name || 'Farmer' }}</h2>
+    <p>Welcome back to your dashboard</p>
+  </div>
+  <div class="user-profile" @click="openProfileModal" title="Click to update your profile">
+    <img
+      v-if="currentUser?.avatar_url"
+      :src="currentUser.avatar_url"
+      alt="Profile"
+      class="profile-picture clickable"
+    />
+    <img
+      v-else
+      :src="defaultAvatar"
+      alt="Default Profile"
+      class="profile-picture clickable"
+    />
+  </div>
+</header>
+
+
       <!-- Scrollable Main Content -->
       <main class="main-content">
         <ProfileModal
@@ -48,6 +55,8 @@
           @close="closeProfileModal"
           @updated="onProfileUpdated"
         />
+
+
         <!-- Dashboard Overview -->
         <section v-if="section === 'overview'" class="dashboard-overview">
           <!-- Stats Grid -->
@@ -73,41 +82,51 @@
               <div class="stat-label">Rating</div>
             </div>
           </div>
-          <!-- Quick Actions -->
-          <div class="content-section">
-            <h3 class="section-title">Quick Actions</h3>
-            <div class="quick-actions">
-              <button class="action-btn" @click="switchSection('listings'); showForm = true;">
-                <span>➕</span> Add Product
-              </button>
-              <button class="action-btn" @click="switchSection('sales')">
-                <span>📋</span> View History
-              </button>
-              <button class="action-btn" @click="switchSection('listings')">
-                <span>📊</span> Update listings
-              </button>
-              <button class="action-btn" @click="switchSection('feedback')">
-                <span>📈</span> View Feedback
-              </button>
-            </div>
-          </div>
-          <!-- Recent Activity -->
-          <div class="content-section">
-            <h3 class="section-title">Recent Activity</h3>
-            <div class="activity-list">
-              <div v-for="sale in sales.slice(0, 5)" :key="sale.id" class="activity-item">
-                <div class="activity-icon">💰</div>
-                <div class="activity-content">
-                  <p><strong>{{ sale.product?.name }}</strong> × {{ sale.quantity }}</p>
-                  <span>{{ formatDate(sale.created_at) }}</span>
-                </div>
-                <div class="activity-value">₺{{ sale.total_price }}</div>
-              </div>
-              <div v-if="sales.length === 0" class="empty-activity">
-                No recent activity
-              </div>
-            </div>
-          </div>
+
+
+     <!-- Quick Actions & Recent Activity Side-by-Side -->
+<div class="dashboard-grid">
+  <!-- Left Column: Quick Actions -->
+  <div class="quick-actions-column">
+    <h3 class="section-title">Quick Actions</h3>
+    <div class="quick-action-cards">
+      <button class="quick-action-card" @click="switchSection('listings')">
+        <span>📊</span>
+        <span>Update listings</span>
+      </button>
+      <button class="quick-action-card" @click="switchSection('sales')">
+        <span>📋</span>
+        <span>View History</span>
+      </button>
+      <button class="quick-action-card" @click="switchSection('orders')">
+        <span>📦</span>
+        <span>View Orders</span>
+      </button>
+      <button class="quick-action-card" @click="switchSection('feedback')">
+        <span>📈</span>
+        <span>View Feedback</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Right Column: Recent Activity -->
+  <div class="recent-activity-column">
+    <h3 class="section-title">Recent Activity</h3>
+    <div class="activity-items">
+      <div v-for="sale in sales.slice(0, 5)" :key="sale.id" class="activity-item">
+        <div class="activity-icon">💰</div>
+        <div class="activity-content">
+          <p><strong>{{ sale.product?.name }}</strong> × {{ sale.quantity }}</p>
+          <span>{{ formatDate(sale.created_at) }}</span>
+        </div>
+        <div class="activity-value">₺{{ sale.total_price }}</div>
+      </div>
+      <div v-if="sales.length === 0" class="empty-activity">
+        No recent activity
+      </div>
+    </div>
+  </div>
+</div>
         </section>
 
         <!-- Listings Section -->
@@ -166,12 +185,16 @@
               </div>
               <div class="form-group">
                 <label for="productUnit">Unit of Measure</label>
-                <select id="productUnit" v-model="newProduct.unit_id" required>
-                  <option value="">Select a unit</option>
-                  <option v-for="unit in units" :key="unit.id" :value="unit.id">
-                    {{ unit.name }} ({{ unit.abbreviation }})
-                  </option>
-                </select>
+               <select id="productUnit" v-model="newProduct.unit_id" required>
+  <option value="">Select a unit</option>
+  <option
+    v-for="unit in uniqueUnitsList"
+    :key="unit.id"
+    :value="unit.id"
+  >
+    {{ unit.name }} ({{ unit.abbreviation }})
+  </option>
+</select>
               </div>
             </div>
             <div class="form-group">
@@ -253,11 +276,11 @@
           </div>
         </section>
 
-   <!-- FARMER MESSAGING SECTION -->
+  <!-- FARMER MESSAGING SECTION -->
 <section v-if="section === 'messages'" class="messaging-section">
   <div class="messaging-container">
     <!-- Conversations Sidebar -->
-    <div class="conversation-list">
+    <div class="conversation-list" :class="{ 'mobile-hidden': currentConversation }">
       <div class="conversation-header">
         <h3>Messages</h3>
         <input
@@ -289,14 +312,21 @@
         </li>
       </ul>
     </div>
-    <!-- Chat Window -->
+
+    <!-- Chat Area -->
     <div class="chat-area">
       <div v-if="!currentConversation" class="placeholder">
         <p>Select a conversation to start messaging</p>
       </div>
+
       <div v-else class="chat-window">
-        <!-- Header -->
+        <!-- ✅ FIXED HEADER -->
         <div class="chat-header">
+          <button 
+            v-if="currentConversation" 
+            @click="currentConversation = null" 
+            class="back-button"
+          >←</button>
           <img :src="getConversationAvatar(currentConversation)" class="avatar" />
           <div>
             <h4>{{ getConversationTitle(currentConversation) }}</h4>
@@ -304,76 +334,85 @@
           </div>
         </div>
 
+        <!-- ✅ SCROLLABLE MESSAGES MIDDLE -->
+        <div class="messages-wrapper">
+          <div class="messages" ref="messagesContainer">
+            <div
+              v-for="(dateGroup, dateIndex) in groupMessagesByDateAndSender(currentConversation.messages)"
+              :key="dateIndex"
+              class="date-group"
+            >
+              <div class="date-header">
+                <span>{{ dateGroup.formattedDate }}</span>
+              </div>
+              <div
+                v-for="(senderGroup, senderIndex) in dateGroup.senderGroups"
+                :key="senderIndex"
+                :class="['message-group', senderGroup.sender_id === userId ? 'sent-group' : 'received-group']"
+              >
+                <div class="avatar-container" v-if="senderGroup.sender_id !== userId">
+                  <img :src="senderGroup.avatar_url" class="avatar" />
+                </div>
+                <div class="messages-bubble">
+                  <div
+                    v-for="(msg, msgIndex) in senderGroup.messages"
+                    :key="msg.id"
+                    :class="['message', 'grouped-message', senderGroup.sender_id === userId ? 'sent' : 'received']"
+                  >
+                    <div class="bubble">
+                      <!-- Inline reply preview -->
+                      <div v-if="msg.reply_to_sender_name" class="inline-reply-preview">
+                        <span class="reply-label">Replying to: {{ msg.reply_to_sender_name }}</span>
+                        <p class="reply-text">{{ msg.reply_to_message_text }}</p>
+                      </div>
 
-<!-- Messages -->
-<div class="messages" ref="messagesContainer">
-  <div
-    v-for="(dateGroup, dateIndex) in groupMessagesByDateAndSender(currentConversation.messages)"
-    :key="dateIndex"
-    class="date-group"
-  >
-    <!-- Date Header -->
-    <div class="date-header">
-      <span>{{ dateGroup.formattedDate }}</span>
-    </div>
-    
-    <!-- Message Groups for this date -->
-    <div
-      v-for="(senderGroup, senderIndex) in dateGroup.senderGroups"
-      :key="senderIndex"
-      :class="['message-group', senderGroup.sender_id === userId ? 'sent-group' : 'received-group']"
-    >
-      <div class="avatar-container" v-if="senderGroup.sender_id !== userId">
-        <img :src="senderGroup.avatar_url" class="avatar" />
-      </div>
-      <div class="messages-bubble">
-        <div
-          v-for="(msg, msgIndex) in senderGroup.messages"
-          :key="msg.id"
-          :class="['message', 'grouped-message', senderGroup.sender_id === userId ? 'sent' : 'received']"
-        >
-          <div class="bubble">
-            <strong v-if="msgIndex === 0 && senderGroup.sender_id !== userId">{{ senderGroup.sender_name }}</strong>
-            <div class="message-content">
-              {{ msg.message_text || msg.message }}
-              <!-- Display images/files if present -->
-              <div v-if="msg.attachment_url" class="attachment-preview">
-                <img v-if="isImage(msg.attachment_url)" :src="msg.attachment_url" alt="Attachment" class="attached-image" />
-                <div v-else class="file-attachment">
-                  📎 {{ getFileName(msg.attachment_url) }}
+                      <strong v-if="msgIndex === 0 && senderGroup.sender_id !== userId">
+                        {{ senderGroup.sender_name }}
+                      </strong>
+
+                      <div class="message-content">
+                        {{ msg.message_text || msg.message }}
+                        <div v-if="msg.attachment_url" class="attachment-preview">
+                          <img
+                            v-if="isImage(msg.attachment_url)"
+                            :src="msg.attachment_url"
+                            alt="Attachment"
+                            class="attached-image"
+                          />
+                          <div v-else class="file-attachment">
+                            📎 {{ getFileName(msg.attachment_url) }}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="message-meta">
+                        <small class="timestamp">{{ formatTime(msg.created_at) }}</small>
+                        <span v-if="msg.sender_id === userId" class="read-status">
+                          <span v-if="msg.is_read" class="blue-ticks">✓✓</span>
+                          <span v-else class="gray-ticks">✓</span>
+                        </span>
+                      </div>
+
+                      <!-- Message options -->
+                      <div 
+                        v-if="msgIndex === senderGroup.messages.length - 1" 
+                        :class="['message-options', selectedMessageId === msg.id ? 'active' : '']"
+                        @click.stop="toggleMessageOptions(msg.id)"
+                      >⋮</div>
+                      <div v-if="selectedMessageId === msg.id" class="options-menu">
+                        <button @click.stop="replyToMessage(msg)">Reply</button>
+                        <button @click.stop="forwardMessage(msg)">Forward</button>
+                        <button @click.stop="deleteMessage(msg)">Delete</button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-
-<div class="message-meta">
-  <small class="timestamp">{{ formatTime(msg.created_at) }}</small>
-  <span v-if="msg.sender_id === userId" class="read-status">
-    <span v-if="msg.is_read" class="blue-ticks">✓✓</span>
-    <span v-else class="gray-ticks">✓</span>
-  </span>
-</div>       
-
-
-<!-- Message options (three dots) - only show on last message in group -->
-            <div 
-  v-if="msgIndex === senderGroup.messages.length - 1" 
-  :class="['message-options', selectedMessageId === msg.id ? 'active' : '']"
-  @click.stop="toggleMessageOptions(msg.id)"
->
-  ⋮
-</div>
-<div v-if="selectedMessageId === msg.id" class="options-menu">
-  <button @click.stop="replyToMessage(msg)">Reply</button>
-  <button @click.stop="forwardMessage(msg)">Forward</button>
-  <button @click.stop="deleteMessage(msg)">Delete</button>
-</div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-</div>
-               <!-- Reply indicator (shows above input when replying) -->
+
+        <!-- ✅ REPLY INDICATOR (optional, sits above input) -->
         <div v-if="replyMessage" class="reply-indicator">
           <div class="reply-header">
             <span class="reply-sender">Replying to: {{ replyMessage.sender }}</span>
@@ -381,16 +420,12 @@
           </div>
           <div class="reply-content">{{ replyMessage.text }}</div>
         </div>
-        
-        <!-- Input -->
+
+        <!-- ✅ FIXED INPUT ROW -->
         <div class="input-row">
           <div class="input-tools">
-            <button @click="openFilePicker" title="Attach file">
-              📎
-            </button>
-            <button @click="toggleEmojiPicker" title="Add emoji">
-              😊
-            </button>
+            <button @click="openFilePicker" title="Attach file">📎</button>
+            <button @click="toggleEmojiPicker" title="Add emoji">😊</button>
           </div>
           <input
             v-model="newMessage"
@@ -406,7 +441,7 @@
             multiple
           />
         </div>
-        
+
         <!-- Emoji Picker -->
         <div v-if="showEmojiPicker" class="emoji-picker">
           <div 
@@ -415,9 +450,7 @@
             @click="addEmoji(emoji)" 
             class="emoji-option"
             :title="emoji"
-          >
-            {{ emoji }}
-          </div>
+          >{{ emoji }}</div>
         </div>
       </div>
     </div>
@@ -724,6 +757,8 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import ProfileModal from '@/components/ProfileModal2.vue'
+const defaultAvatar = '/default-avatar.jpg'
+
 // Initialize auth store
 const authStore = useAuthStore()
 const currentUser = computed(() => authStore.user)
@@ -733,9 +768,14 @@ axios.defaults.baseURL = 'http://127.0.0.1:8000'
 const section = ref('overview')
 const switchSection = (newSection) => {
   section.value = newSection
+  // Close sidebar on mobile after selection
+  if (isMobile.value) {
+    sidebarHidden.value = true
+  }
   if (newSection === 'messages') {
-    fetchConversations()
-  } else if (newSection === 'feedback') {
+     fetchConversations()
+  } 
+  else if (newSection === 'feedback') {
     fetchFeedback()
   } else if (newSection === 'sales') {
     fetchSales()
@@ -791,8 +831,7 @@ const fetchProfile = async () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const userData = res.data;
-    userData.avatar_url = userData.avatar_url || '/default-avatar.png';
-    
+userData.avatar_url = userData.avatar_url || '/default-avatar.jpg';    
     // Save to auth store AND set userId
     authStore.setUser(userData);
     userId.value = userData.id; // ✅ Set the real user ID
@@ -806,7 +845,9 @@ const fetchProfile = async () => {
     window.location.href = '/login';
   }
 };
-
+const backToConversations = () => {
+  currentConversation.value = null;
+};
 
 
 
@@ -931,6 +972,8 @@ const onProfileUpdated = (newUserData) => {
   userId.value = newUserData.id; // Sync ID
   avatarUrl.value = newUserData.avatar_url || '/default-avatar.png'; // ← Add this
 };
+
+
 // Logout
 const handleLogout = async () => {
   try {
@@ -987,23 +1030,37 @@ const fetchCategories = async () => {
     console.error('Failed to fetch categories:', err)
   }
 }
-const unitsFetched = ref(false)
-const fetchUnits = async () => {
-  if (unitsFetched.value) {
-    console.log('Units already fetched. Skipping.')
-    return
-  }
-  try {
-    const res = await axios.get('/api/units')
-    if (Array.isArray(res.data)) {
-units.value = res.data
-      unitsFetched.value = true
-      console.log('Units loaded:', units.value)
+const unitsFetched = ref(false);
+const uniqueUnitsList = computed(() => {
+  const seen = new Set();
+  return units.value.filter(unit => {
+    // Create a unique key based on name + abbreviation (case-insensitive)
+    const key = `${unit.name?.toLowerCase()}-${unit.abbreviation?.toLowerCase()}`;
+    if (seen.has(key)) {
+      return false;
     }
+    seen.add(key);
+    return true;
+  });
+});
+
+const fetchUnits = async () => {
+  try {
+    const res = await axios.get('/api/units');
+    // ✅ Deduplicate by 'id' (most reliable)
+    const uniqueUnits = res.data.filter(
+      (unit, index, self) => index === self.findIndex(u => u.id === unit.id)
+    );
+    units.value = uniqueUnits;
   } catch (err) {
-    console.error('Failed to fetch units:', err)
+    console.error('Failed to fetch units:', err);
   }
-}
+};
+
+
+
+
+
 // Product form handlers
 const handleImageChange = (event) => {
   const file = event.target.files[0]
@@ -1169,19 +1226,22 @@ const fetchFeedback = async (page = 1) => {
   }
 }
 const sendReply = async (id) => {
-  if (!replies[id]) return alert('Reply cannot be empty.')
+  if (!replies[id]) {
+    showStatus('Reply cannot be empty.', 'error')
+    return
+  }
   sendingReply[id] = true
   try {
     await axios.post(
-      `/api/reviews/${id}/reply`,
+      `/api/feedback/${id}/reply`, // ✅ Use /feedback/
       { reply: replies[id] },
       { headers: getAuthHeaders() }
     )
-    alert('Reply sent successfully.')
+    showStatus('Reply sent successfully.', 'success')
     fetchFeedback(pagination.value.current_page)
   } catch (err) {
     console.error('Failed to send reply:', err)
-    alert('Failed to send reply.')
+    showStatus('Failed to send reply.', 'error')
   } finally {
     sendingReply[id] = false
   }
@@ -1189,15 +1249,15 @@ const sendReply = async (id) => {
 const approveFeedback = async (id) => {
   try {
     await axios.post(
-      `/api/reviews/${id}/approve`,
+      `/api/feedback/${id}/approve`, // ✅ Use /feedback/, not /reviews/
       {},
       { headers: getAuthHeaders() }
     )
-    alert('Feedback approved successfully.')
+    showStatus('Feedback approved successfully.', 'success')
     fetchFeedback(pagination.value.current_page)
   } catch (err) {
     console.error('Failed to approve feedback:', err)
-    alert('Failed to approve feedback.')
+    showStatus('Could not approve feedback.', 'error')
   }
 }
 const deleteFeedback = (id) => {
@@ -1309,12 +1369,26 @@ const emojiList = ref(['😀', '😂', '😍', '😎', '😊', '🥰', '😘', '
 
 /* Computed search filter */
 const filteredConversations = computed(() => {
-  if (!conversationSearchQuery.value.trim()) return conversations.value
-  return conversations.value.filter((conv) =>
-    getConversationTitle(conv)
-      .toLowerCase()
-      .includes(conversationSearchQuery.value.toLowerCase())
-  )
+  let list = conversations.value
+
+  // Apply search filter if query exists
+  if (conversationSearchQuery.value.trim()) {
+    const query = conversationSearchQuery.value.toLowerCase()
+    list = list.filter((conv) =>
+      getConversationTitle(conv).toLowerCase().includes(query)
+    )
+  }
+
+  // ✅ Sort by latest_message.created_at (newest first)
+  return list.sort((a, b) => {
+    const dateA = a.latest_message?.created_at
+      ? new Date(a.latest_message.created_at).getTime()
+      : 0
+    const dateB = b.latest_message?.created_at
+      ? new Date(b.latest_message.created_at).getTime()
+      : 0
+    return dateB - dateA // Descending: newest on top
+  })
 })
 
 /* Helpers */
@@ -1361,7 +1435,6 @@ function getAvatarUrl(userId, name) {
 }
 
 function getSenderAvatar(message) {
-  // First try to get avatar from message sender if available
   if (message.sender_avatar_url) return message.sender_avatar_url
   if (message.sender?.name) return getAvatarUrl(message.sender_id, message.sender.name)
   
@@ -1386,23 +1459,26 @@ function getLastMessagePreview(conv) {
 async function loadConversations() {
   loadingConversations.value = true
   try {
-    const res = await axios.get('/api/conversations')
+    const token = localStorage.getItem('token')
+    const res = await axios.get('/api/conversations', {
+      headers: { Authorization: `Bearer ${token}` } // ✅ Add this
+    })
     conversations.value = res.data
   } catch (e) {
-    console.error(e)
+    console.error('Failed to load conversations:', e)
   } finally {
     loadingConversations.value = false
   }
 }
-
 /* Select a conversation */
 async function selectConversation(conv) {
+  console.log('Selecting conversation with:', conv);
+  console.log('Other user:', conv.participants?.find(p => p.id !== userId.value));
+
   // Mark messages as read on the backend
-   console.log('Selecting conversation with:', conv)
-  console.log('Other user:', conv.participants?.find(p => p.id !== userId.value))
   try {
     await axios.post(`/api/conversations/${conv.id}/read`, {}, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      headers: getAuthHeaders()
     });
   } catch (e) {
     console.warn('Failed to mark messages as read:', e);
@@ -1414,22 +1490,25 @@ async function selectConversation(conv) {
     existingConv.unread_count = 0;
   }
 
-  // Load messages
+  // Load messages WITH authentication
   currentConversation.value = {
     id: conv.id,
     participants: conv.participants,
     latest_message: conv.latest_message,
-    unread_count: 0, // now read
+    unread_count: 0,
     messages: []
   };
 
   try {
-    const res = await axios.get(`/api/conversations/${conv.id}/messages`);
+    const res = await axios.get(`/api/conversations/${conv.id}/messages`, {
+      headers: getAuthHeaders() // ✅ Include auth here!
+    });
     currentConversation.value.messages = res.data;
     await nextTick();
     scrollToBottom();
   } catch (e) {
-    console.error(e);
+    console.error('Failed to load messages:', e);
+    showStatus('Failed to load messages.', 'error');
   }
 }
 
@@ -1509,39 +1588,56 @@ function formatDateHeader(dateString) {
     })
   }
 }
-
 const sendMessage = async () => {
   if ((!newMessage.value.trim() && !selectedFile.value) || !currentConversation.value) return
-  
+
   const tempMessageText = newMessage.value.trim()
+
+  // Include reply context if replying
+  const replyContext = replyMessage.value
+    ? {
+        reply_to_message_id: replyMessage.value.id,
+        reply_to_sender_name: replyMessage.value.sender,
+        reply_to_message_text: replyMessage.value.text
+      }
+    : null
+
   const msg = {
     id: Date.now(),
     message_text: tempMessageText,
     sender_id: userId.value,
     created_at: new Date().toISOString(),
-    attachment_url: selectedFile.value ? URL.createObjectURL(selectedFile.value) : null
+    attachment_url: selectedFile.value ? URL.createObjectURL(selectedFile.value) : null,
+    // ✅ Attach reply data for inline display
+    reply_to_message_id: replyContext?.reply_to_message_id || null,
+    reply_to_sender_name: replyContext?.reply_to_sender_name || null,
+    reply_to_message_text: replyContext?.reply_to_message_text || null
   }
-  
+
   currentConversation.value.messages.push(msg)
-  console.log('👉 Sending message from:', msg.sender_id)
-  console.log('👉 Current user ID:', userId.value)
-  console.log('👉 Are they equal?', msg.sender_id === userId.value)
-  console.log('👉 Message object:', msg)
-  
+
+  // ✅ Clear floating reply bar after sending
+  replyMessage.value = null
+
   // Reset input
   newMessage.value = ''
   selectedFile.value = null
-  
+
   try {
     const token = localStorage.getItem('token')
     const formData = new FormData()
     formData.append('conversation_id', currentConversation.value.id)
     formData.append('message_text', tempMessageText)
-    
+
+    // Optional: send ID to backend if you store it
+    if (replyContext?.reply_to_message_id) {
+      formData.append('reply_to_message_id', replyContext.reply_to_message_id)
+    }
+
     if (selectedFile.value) {
       formData.append('attachment', selectedFile.value)
     }
-    
+
     const res = await axios.post(
       '/api/messages',
       formData,
@@ -1552,6 +1648,7 @@ const sendMessage = async () => {
         } 
       }
     )
+
     Object.assign(msg, res.data)
     await loadConversations()
     scrollToBottom()
@@ -1658,17 +1755,27 @@ function handleClickOutside(event) {
     const replyIndicator = event.target.closest('.reply-indicator')
   const optionsMenu = event.target.closest('.options-menu')
   const optionsButton = event.target.closest('.message-options')
+   const emojiPicker = event.target.closest('.emoji-picker') // 👈 Add this
+  const emojiButton = event.target.closest('.input-tools button') // the 😊 button
   
   // Only close if the click is outside both the menu and the button
   if (!optionsMenu && !optionsButton) {
     selectedMessageId.value = null
+  }
+    // Close message options if click is outside
+  if (!optionsMenu && !optionsButton) {
+    selectedMessageId.value = null
+  }
+
+  // ✅ Close emoji picker if click is outside
+  if (!emojiPicker && !emojiButton) {
+    showEmojiPicker.value = false
   }
 }
 
 
 // Update onMounted
 onMounted(() => {
-  loadConversations()
   document.addEventListener('click', handleClickOutside)
 })
 
@@ -1740,6 +1847,21 @@ watch(
 onMounted(() => {
   loadConversations()
 })
+// Detect mobile viewport
+const isMobile = computed(() => {
+  return window.innerWidth <= 768
+})
+
+// Optional: React to window resize
+const handleResize = () => {
+  // Force reactivity (Vue 3 usually handles this via resize observers, but this is safe)
+}
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
 
 </script>
 
@@ -1754,19 +1876,44 @@ onMounted(() => {
 /* App Container */
 .app-container {
   display: flex;
-  min-height: 100vh;
+  min-height: 100%;
   background: rgba(30, 41, 59, 0.95);
   font-family: 'Segoe UI', sans-serif;
   color: white;
   position: relative;
+  width: 100vw; /* Use viewport width */
+  overflow-x: hidden; /* Prevent horizontal scroll if needed */
 }
 
-/* Sidebar */
+/* Global reset - place in a global CSS file or App.vue <style> */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body,
+html {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+/* Also reset body/html margins if they exist */
+body, html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+}
 .sidebar {
   width: 250px;
-  height: 100vh; /* Changed from calc(100vh - 72px) */
-  position: fixed; /* Fixed positioning */
-  top: 0;
+  height: calc(100vh - 100px); /* Full height minus header */
+  position: fixed;
+  top: 90px; /* ← Start below the 100px-tall header */
   left: 0;
   background: rgba(30, 41, 59, 0.95);
   backdrop-filter: blur(10px);
@@ -1774,12 +1921,13 @@ onMounted(() => {
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1rem;
   box-shadow: 2px 0 20px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   overflow-y: auto;
-  transition: transform 0.3s ease; /* Smooth transition for hiding */
+  transition: transform 0.3s ease;
 }
+
 
 .sidebar h2 {
   font-size: 1.5rem;
@@ -1836,27 +1984,33 @@ onMounted(() => {
   min-height: 100vh;
   transition: margin-left 0.3s ease; /* Smooth transition for main content */
 }
+/* Reset body margin to eliminate unwanted space */
+body {
+  margin: 0;
+  padding: 0;
+}
 
-/* Dashboard Header */
 .dashboard-header {
-  position: sticky; /* Changed from fixed */
-  top: 0; /* Stick to the top */
+  position: fixed;
+  top: 0;
   left: 0;
   right: 0;
-  height: 100px;
-  background: rgba(255, 255, 255, 0.1);
+  height: 90px; /* or 60px–80px, adjust as needed */
+  background: rgba(25, 38, 69, 0.4);
   backdrop-filter: blur(20px);
-  padding: 1.7rem;
+  padding: 0 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-top: 0px;
-  border-bottom: 4px solid rgba(255, 255, 255, 0.2);
-  z-index: 400; /* Lower z-index than sidebar to avoid overlap */
+  z-index: 1000;
   color: white;
-  transition: margin-left 0.3s ease; /* Smooth transition when sidebar toggles */
+  box-sizing: border-box;
 }
 
+/* Push main content down so it doesn't hide under the fixed header */
+.main-content {
+  padding-top: 100px; /* Must match header height */
+}
 .hamburger-icon {
   display: flex; /* Hidden by default, shown on mobile */
   background: none;
@@ -1901,25 +2055,17 @@ onMounted(() => {
   object-fit: cover;
 }
 
-.profile-picture.placeholder {
-  background: linear-gradient(135deg, #10b981, #059669);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  color: white;
-}
 
-/* Main Content */
+
 .main-content {
-  flex: 1;
+  position:fixed-row;
   padding: 2rem;
-  padding-top: 25px; 
+  padding-top: 100px; /* ← This should be ≥ header height + some buffer */
+  padding-bottom:0;
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
   overflow-y: auto;
   color: white;
-  transition: margin-left 0.3s ease; /* Smooth transition when sidebar toggles */
 }
 
 /* Stats Grid */
@@ -1983,35 +2129,85 @@ onMounted(() => {
   margin-bottom: 1.5rem;
 }
 
-/* Quick Actions */
-.quick-actions {
+/* ===== DASHBOARD GRID LAYOUT ===== */
+.dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: 2fr 2fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+/* ===== QUICK ACTIONS COLUMN ===== */
+.quick-actions-column {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  padding: 1.5rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.quick-actions-column .section-title {
+  color: white;
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.quick-action-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
 }
 
-.action-btn {
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
-  border: none;
-  padding: 1rem 1.5rem;
-  border-radius: 15px;
+.quick-action-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1rem;
   cursor: pointer;
-  font-weight: 500;
-  transition: all 0.3s ease;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  text-align: center;
   justify-content: center;
+  flex-direction: column;
+  min-height: 80px;
 }
 
-.action-btn:hover {
+.quick-action-card:hover {
+  background: rgba(16, 185, 129, 0.2);
   transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
 }
 
-/* Activity List */
-.activity-list {
+.quick-action-card span:first-child {
+  font-size: 1.5rem;
+}
+
+.quick-action-card span:last-child {
+  font-size: 0.9rem;
+}
+
+/* ===== RECENT ACTIVITY COLUMN ===== */
+.recent-activity-column {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  padding: 1.5rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.recent-activity-column .section-title {
+  color: white;
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.activity-items {
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -2023,7 +2219,7 @@ onMounted(() => {
   gap: 1rem;
   padding: 1rem;
   background: rgba(255, 255, 255, 0.05);
-  border-radius: 15px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -2031,6 +2227,7 @@ onMounted(() => {
   font-size: 1.5rem;
   width: 40px;
   text-align: center;
+  color: #10b981;
 }
 
 .activity-content {
@@ -2057,8 +2254,64 @@ onMounted(() => {
 .empty-activity {
   text-align: center;
   color: rgba(255, 255, 255, 0.6);
-  padding: 2rem;
+  padding: 1.5rem;
   font-style: italic;
+}
+/* ✅ Mobile Responsive Dashboard Grid */
+@media (max-width: 768px) {
+  /* Stack Quick Actions and Recent Activity vertically */
+  .dashboard-grid {
+    grid-template-columns: 1fr; /* Single column */
+    gap: 1.5rem; /* Slightly reduced gap */
+  }
+
+  /* Make Quick Actions cards full-width and single column */
+  .quick-action-cards {
+    grid-template-columns: 1fr; /* One card per row */
+  }
+
+  /* Optional: Slightly reduce padding/font for tighter mobile layout */
+  .quick-actions-column,
+  .recent-activity-column {
+    padding: 1.25rem; /* Slightly less padding */
+    border-radius: 16px; /* Slightly smaller radius */
+  }
+
+  .quick-actions-column .section-title,
+  .recent-activity-column .section-title {
+    font-size: 1.15rem; /* Slightly smaller title */
+    margin-bottom: 1.25rem;
+  }
+
+  .quick-action-card {
+    min-height: 70px; /* Slightly shorter cards */
+    padding: 0.9rem;
+  }
+
+  .quick-action-card span:first-child {
+    font-size: 1.4rem;
+  }
+
+  .quick-action-card span:last-child {
+    font-size: 0.85rem;
+  }
+
+  /* Ensure activity items stay readable */
+  .activity-item {
+    padding: 0.9rem;
+  }
+
+  .activity-content p {
+    font-size: 0.95rem;
+  }
+
+  .activity-content span {
+    font-size: 0.85rem;
+  }
+
+  .activity-value {
+    font-size: 1rem;
+  }
 }
 
 /* Farmer Listings */
@@ -2109,8 +2362,8 @@ onMounted(() => {
   color: white;
   padding: 0.75rem 1rem;
   border-radius: 12px;
-  font-size: 1rem;
-  min-width: 200px;
+  font-size: 0.7rem;
+  min-width: 100px;
 }
 
 .filter-controls select option {
@@ -2118,6 +2371,23 @@ onMounted(() => {
   color: white;
 }
 
+@media (max-width: 768px) {
+  /* Fix both filter dropdown and form dropdowns */
+  .filter-controls select,
+  .form-group select {
+    min-width: auto !important;
+    width: 50% !important; /* ← Full width in mobile */
+    font-size: 16px; /* Prevents iOS zoom */
+    padding: 0.75rem 1rem;
+    box-sizing: border-box;
+  }
+
+  /* Optional: stack form rows vertically on mobile */
+  .form-row {
+    grid-template-columns: 1fr !important;
+    gap: 1rem;
+  }
+}
 /* Form */
 .form {
   background: rgba(255, 255, 255, 0.05);
@@ -2847,20 +3117,21 @@ onMounted(() => {
 /* MESSAGING LAYOUT */
 .messaging-section {
   width: 100%;
-  height: calc(95vh - 120px);
+  height:85vh;
+  position:relative;
   background: rgba(30, 41, 59, 1);
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
   color: #f1f5f9;
-  padding: 10px;
+  padding: 0px;
 }
 
 .messaging-container {
   display: flex;
   width: 100%;
-  height: 85vh;
+  height: 100%;
   background: #1e293b;
   border-radius: 16px;
   overflow: hidden;
@@ -2870,7 +3141,7 @@ onMounted(() => {
 
 /* LEFT SIDEBAR */
 .conversation-list {
-  width: 20%;
+  width: 100%;
   background: #273349;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
@@ -2880,7 +3151,7 @@ onMounted(() => {
 }
 
 .conversation-header {
-  padding: 16px 16px;
+  padding: 12px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
   display: flex;
@@ -2891,14 +3162,14 @@ onMounted(() => {
 .conversation-header h3 {
   margin: 0;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 400;
   color: #f1f5f9;
 }
 
 .search-box {
-  width: 100%;
-  padding: 12px 16px;
-  border-radius: 12px;
+  width: 65%;
+  padding: 12px 8px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(51, 65, 85, 0.7);
   color: #e2e8f0;
@@ -2929,7 +3200,7 @@ onMounted(() => {
 .conversation {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 12px 16px;
   cursor: pointer;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -3001,55 +3272,65 @@ onMounted(() => {
   flex-shrink: 0;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
-/* CHAT AREA */
+
+/* Chat Area */
 .chat-area {
-  width: 80%;
+  flex: 1;
   display: flex;
   flex-direction: column;
   background: #0f172a;
-  height: 100%;
+  min-height: 0; /* Crucial for nested flex scrolling */
   position: relative;
   color: #f1f5f9;
 }
 
-/* HEADER - FIXED AT TOP */
+/* Middle: scrollable messages */
+.messages-wrapper {
+  flex: 1; /* This makes it grow to fill available space */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* MESSAGES AREA - ONLY SCROLLABLE PART */
+.messages {
+  flex: 1; /* This makes the messages area scrollable */
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-behavior: smooth;
+}
+
+
+
+/* Header — sticks to top */
 .chat-header {
+  flex-shrink: 0;
+  padding: 14px 20px;
+  background: rgba(51, 65, 85, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   gap: 14px;
-  background: rgba(51, 65, 85, 0.7);
-  padding: 14px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-  position: sticky;
-  top: 0;
   z-index: 10;
   backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
 }
 
-.chat-header .avatar {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-.chat-header h4 {
-  color: #f1f5f9;
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-header small {
-  color: #94a3b8;
+/* Reply indicator above input */
+.reply-indicator {
+  flex-shrink: 0;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 0 20px 8px;
   font-size: 0.85rem;
-  font-weight: 500;
+  max-height: 80px;
+  overflow: hidden;
 }
 
 /* MESSAGES AREA - ONLY SCROLLABLE PART */
@@ -3154,7 +3435,7 @@ onMounted(() => {
   background: #22c55e;
   color: #fff;
   border-radius: 16px 16px 4px 16px;
-  padding: 12px 16px;
+  padding: 22px 16px;
   box-shadow: 0 2px 6px rgba(34, 197, 94, 0.2);
   font-size: 0.95rem;
   line-height: 1.4;
@@ -3165,7 +3446,7 @@ onMounted(() => {
   background: #334155;
   color: #f1f5f9;
   border-radius: 16px 16px 16px 4px;
-  padding: 12px 16px;
+  padding: 20px 16px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   font-size: 0.95rem;
   line-height: 1.4;
@@ -3214,7 +3495,7 @@ onMounted(() => {
 .file-attachment {
   background: #1e293b;
   color: #94a3b8;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: 12px;
   font-size: 0.85rem;
   display: inline-flex;
@@ -3243,7 +3524,7 @@ onMounted(() => {
   font-size: 18px;
   opacity: 0;
   transition: opacity 0.2s ease;
-  color: #94a3b8;
+  color: #131414ff;
   z-index: 20;
   background: none;
   border: none;
@@ -3326,43 +3607,59 @@ onMounted(() => {
 
 /* Ensure bubble has relative positioning */
 .bubble {
-  position: relative;
+  position: relative; /* ← ADD THIS */
   max-width: 100%;
   margin-bottom: 0;
+  padding: 22px 16px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  word-wrap: break-word;
+  border-radius: 16px 16px 4px 16px;
+  background: #22c55e;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.2);
 }
-/* Reply indicator (shows above input when replying) */
+
+
+/* REPLY INDICATOR - STANDS OUT ON TOP */
 .reply-indicator {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.2);
+  position: relative; /* Ensure z-index works */
+  z-index: 50; /* Higher than input row, lower than emoji picker if needed */
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
   border-radius: 12px;
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  position: fixed;
-  bottom: 60px; /* Position above input row */
-  left: 24px;
-  right: 24px;
-  z-index: 15;
-  max-width: calc(100% - 48px);
+  gap: 50px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Stronger shadow for depth */
   margin: 0 24px 8px 24px;
-  max-height: 80px;
+  max-width: calc(100% - 48px);
+  max-height: 50px;
   overflow: hidden;
+  font-size: 0.85rem;
+  /* Optional: Add a subtle animation for attention */
+  animation: fadeIn 0.3s ease-in;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Header inside reply indicator */
 .reply-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 0.85rem;
-  color: #22c55e;
+  color: #059669;
   font-weight: 500;
 }
 
 .reply-sender {
   font-style: italic;
+  font-weight: 600;
 }
 
 .cancel-reply {
@@ -3386,6 +3683,7 @@ onMounted(() => {
   background-color: rgba(255, 255, 255, 0.08);
 }
 
+/* Content inside reply indicator */
 .reply-content {
   font-size: 0.9rem;
   color: #e2e8f0;
@@ -3398,16 +3696,14 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-
-
-/* INPUT ROW - FIXED AT BOTTOM */
 .input-row {
   display: flex;
+  width: 71.9%;
   align-items: center;
-  padding: 12px 24px;
+  padding: 14px 24px;
   background: rgba(51, 65, 85, 0.7);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  position: sticky;
+  position: fixed; /* Changed from 'fixed' */
   bottom: 0;
   z-index: 10;
   flex-shrink: 0;
@@ -3416,14 +3712,14 @@ onMounted(() => {
 
 .input-row input {
   flex: 1;
-  padding: 14px 20px;
-  border-radius: 24px;
+  padding: 25px 20px;
+  border-radius: 12px;
   border: none;
   outline: none;
-  background: #334155;
-  color: #f1f5f9;
+  background: #0035504b;
+  color: #f9f9feff;
   font-size: 0.95rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.62);
 }
 
 .input-row input::placeholder {
@@ -3438,7 +3734,7 @@ onMounted(() => {
   background: #22c55e;
   color: white;
   border: none;
-  border-radius: 24px;
+  border-radius: 14px;
   padding: 12px 20px;
   margin-left: 12px;
   cursor: pointer;
@@ -3468,28 +3764,27 @@ onMounted(() => {
   height: 100%;
   color: #94a3b8;
   font-style: italic;
-  font-size: 1rem;
+  font-size: 2rem;
 }
 
 /* Emoji Picker */
 .emoji-picker {
-  position: absolute;
-  bottom: 100px;
-  left: 24px;
+  position: fixed;
+  bottom: 70px; /* Above input row (input is ~60px tall) */
+  left: 16px;
+  right: 16px;
+  max-height: 200px;
   background: #1e293b;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  padding: 14px;
+  padding: 14px 8px 8px; /* Extra space for close button */
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  gap: 10px;
-  max-width: 240px;
-  max-height: 180px;
+  gap: 16px;
   overflow-y: auto;
   z-index: 1000;
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .emoji-option {
@@ -3677,6 +3972,7 @@ onMounted(() => {
   color: #94a3b8;
   text-align: left;
 }
+
 /* Confirmation Overlay & Modal */
 .confirm-overlay {
   position: fixed;
@@ -3792,13 +4088,13 @@ onMounted(() => {
   }
 
   .dashboard-header {
-    position: sticky; /* Ensure sticky behavior on mobile */
+    position: fixed; /* Ensure sticky behavior on mobile */
     margin-left: 0;
   }
 
   .main-content {
-    padding: 1.5rem; /* Reduced padding */
-    padding-top: 105px; /* Adjusted for sticky header */
+    padding: 0.5rem; /* Reduced padding */
+    padding-top: 100px; /* Adjusted for sticky header */
   }
 
   .stats-grid,
@@ -3842,7 +4138,7 @@ onMounted(() => {
   /* Messaging Section Adjustments */
   .messaging-container {
     flex-direction: column; /* Stack sidebar and chat vertically */
-    max-height: calc(100vh - 120px); /* Adjust height calculation */
+    max-height: 100%; /* Adjust height calculation */
   }
 
   .conversation-list {
@@ -3991,7 +4287,7 @@ onMounted(() => {
   }
 
   .message {
-    max-width: 85%; /* Wider messages on very small screens */
+    max-width: 120%; /* Wider messages on very small screens */
   }
 
   .input-row {
@@ -3999,7 +4295,7 @@ onMounted(() => {
   }
 
   .input-row input {
-    padding: 6px; /* Smaller input padding */
+    padding: 8px; /* Smaller input padding */
   }
 
   .input-row button {
@@ -4048,7 +4344,7 @@ onMounted(() => {
   transition: all 0.3s ease;
 }
 
-.form-group input:focus,
+.form-group input:focus, 
 .form-group textarea:focus,
 .form-group select:focus {
   outline: none;
@@ -4082,4 +4378,194 @@ onMounted(() => {
   font-size: 0.85rem;
   margin-top: 0.5rem;
 }
+
+/* Full-bleed sections: no padding, no radius, no border, no margin */
+.farmer-listings,
+.content-section,
+.messaging-section,
+.dashboard-overview {
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+/* ===== MOBILE-FIRST MESSAGING LAYOUT ===== */
+
+/* Default: Desktop layout */
+.messaging-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background: #1e293b;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  margin-top: 60px;
+}
+
+.conversation-list {
+  width: 25%;
+  background: #273349;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #e2e8f0;
+}
+
+.chat-area {
+  width: 85%;
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+  height: 100%;
+  position: relative;
+  color: #f1f5f9;
+}
+/* Mobile view (max-width: 768px) */
+@media (max-width: 768px) {
+  .messaging-section {
+    position: fixed;
+    top: 0px; /* ← Match your .dashboard-header height */
+    bottom: 100px;
+    left: 0;
+    right: 0;
+    height: calc(100vh - 100px); /* ← Full height minus header */
+    margin: 0;
+    padding: 0;
+  }
+
+  .messaging-container {
+    height: 100%;
+    border-radius: 0;
+    margin-top: 0;
+    flex-direction: column;
+  }
+
+  /* Conversation list */
+  .conversation-list {
+    width: 100% !important;
+    height: calc(100vh - 100px) !important; /* ← Constrain to below header */
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 20;
+    transition: transform 0.3s ease;
+  }
+
+  /* Hide when active */
+  .conversation-list.hidden,
+  .conversation-list.mobile-hidden {
+    transform: translateX(-100%);
+    pointer-events: none;
+    display: none !important;
+  }
+
+  /* Chat area */
+  .chat-area {
+    width: 100% !important;
+    height: calc(100vh - 100px) !important; /* ← Match available space */
+    position: relative;
+    z-index: 10;
+  }
+
+  .chat-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: rgba(30, 41, 59, 0.95);
+  }
+
+  .back-button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding-right: 12px;
+  }
+
+  .messages {
+    max-height: calc(100vh - 270px); /* Adjusted for 100px header + input/chat header */
+    padding: 12px;
+  }
+
+  .input-row {
+    padding: 30px;
+    position: fixed;
+    bottom: 0;
+    background: rgba(51, 65, 85, 0);
+  }
+
+  .input-row input,
+  .input-row button {
+    font-size: 1.2rem;
+    padding: 10px 6px;
+  }
+}
+/* ===== MOBILE-SPECIFIC FIX FOR MAIN CONTENT ===== */
+@media (max-width: 768px) {
+  /* Ensure main wrapper takes full viewport width */
+  .main-wrapper {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  /* Make main content fill available space below header */
+  .main-content {
+    position: fixed;
+    top: 90px; /* Match your header height */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 2rem;
+    padding-top: 1rem; /* Reduced top padding since we're already below header */
+    overflow-y: auto;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    color: white;
+    box-sizing: border-box;
+    z-index: 900;
+  }
+
+  /* Hide sidebar on mobile by default */
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .sidebar:not(.sidebar-hidden) {
+    transform: translateX(0);
+  }
+
+  /* Ensure dashboard header stays sticky */
+  .dashboard-header {
+    position: fixed;
+    top: 0;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    padding: 1.7rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 4px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    box-sizing: border-box;
+  }
+
+  /* Remove any leftover margins/padding from body/html */
+  body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+  }
+}
+
 </style>

@@ -6,21 +6,18 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
-    protected $primaryKey = 'id'; // ← or 'order_id' — which one is it?
-    public $incrementing = true;
-    protected $keyType = 'int';
+    protected $fillable = [
+        'user_id',
+        'total_price',
+        'status',
+        'delivery_method',
+        'shipped_at'
+    ];
 
-  protected $fillable = [
-    'user_id',
-    'total_price',
-    'status',
-    'delivery_method', // ← add this
-    'shipped_at'
-];
-
+    // ✅ ONLY this relationship for items
     public function items()
     {
-        return $this->hasMany(OrderItem::class);
+        return $this->hasMany(OrderItem::class, 'order_id');
     }
 
     public function address()
@@ -28,25 +25,12 @@ class Order extends Model
         return $this->hasOne(OrderAddress::class);
     }
 
-
-    /**
-     * Get the user who placed this order.
-     */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-
-    public function order_items()
-{
-    return $this->hasMany(\App\Models\OrderItem::class);
-}
-
-public function customer()
-{
-    return $this->belongsTo(User::class, 'user_id');
-}
-
-
+    // ❌ REMOVE: redundant and confusing
+    // public function order_items() { ... }
+    // public function customer() { ... } (same as user)
 }

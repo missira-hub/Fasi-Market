@@ -58,8 +58,12 @@ public function store(Request $request)
         $message->attachment_url = $request->file('attachment')->store('messages', 'public');
     }
 
-    $message->save();
-    
+// In MessageController@store
+$message->save();
+
+// ✅ Load sender with name and avatar
+$message->load('sender:id,name,avatar_url');
+
 
     // Return full message with reply data
     return response()->json($message, 201);

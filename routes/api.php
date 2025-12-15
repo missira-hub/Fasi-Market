@@ -26,6 +26,9 @@ use App\Http\Controllers\Farmer\SalesController;
 use App\Http\Controllers\Farmer\FarmerOrderController;
 use App\Http\Controllers\FarmerController;
 use App\Http\Controllers\ForgotPasswordController;
+use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\PasswordResetController;
+
 
 
 
@@ -56,6 +59,9 @@ Route::middleware('auth:sanctum')->post('/profile/avatar', [ProfileController::c
 
 // In routes/api.php
 Route::post('/password/forgot', [ForgotPasswordController::class, 'sendResetLinkEmail']);
+Route::post('/password/reset', [NewPasswordController::class, 'store']);
+
+Route::post('/password/reset', [PasswordResetController::class, 'store']);
 
 
 // ------------------- Admin Routes -------------------
@@ -258,7 +264,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 // Webhooks must be public (no auth middleware)
-// ✅ PUBLIC WEBHOOK ENDPOINT (no auth middleware!)
 Route::post('/webhook', [PaymentController::class, 'handleWebhook']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/farmer/sales-history', [SalesController::class, 'salesHistory']);
@@ -290,7 +295,11 @@ Route::get('/payment/verify', function (Request $request) {
     
     
 });
+// Password reset
+// In routes/api.php
+Route::get('/checkout-session/{session_id}', [PaymentController::class, 'getCheckoutSession']);
 
+Route::post('/confirm-payment', [PaymentController::class, 'confirmPayment']);
 Route::middleware('auth')->group(function () {
     // Admin triggers farmer onboarding
     Route::get('/stripe/onboard/{user}', [PaymentController::class, 'onboardFarmer']);

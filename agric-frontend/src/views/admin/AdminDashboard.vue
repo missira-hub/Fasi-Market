@@ -132,15 +132,7 @@
 
           <!-- Charts Row -->
           <div class="charts-row">
-            <div class="chart-container">
-              <div class="chart-header">
-                <h3>Monthly Revenue</h3>
-                <div class="chart-actions">
-                  <button class="chart-action-btn"><i class="fas fa-download"></i></button>
-                </div>
-              </div>
-              <div class="chart-wrapper"><canvas ref="mrrChartCanvas"></canvas></div>
-            </div>
+             
             <div class="chart-container health-chart">
               <div class="chart-header"><h3>Farm Health Status</h3></div>
               <div class="doughnut-wrapper">
@@ -476,14 +468,14 @@ top: 85px;
   top: 0;
   left: 0;
   right: 0;
-  height: 85px;
+  height: 90px;
   background: linear-gradient(180deg, #2e7d32 0%, #1b5e20 100%);
-  padding: 1.7rem;
+  padding: 1.6rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   color: white;
-  z-index: 900;
+  z-index: 90;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 .hamburger-icon {
@@ -497,7 +489,7 @@ top: 85px;
 }
 .greeting h2 {
   margin: 0;
-  font-size: 1.9rem;
+  font-size: 1.7rem;
   font-weight: 600;
 }
 .greeting p {
@@ -507,8 +499,8 @@ top: 85px;
 }
 .user-profile {
   width: 60px;
-  height: 60px;
-  border-radius: 50%;
+  height: 50px;
+  border-radius: 100%;
   overflow: hidden;
   cursor: pointer;
   border: 3px solid rgba(255,255,255,0.3);

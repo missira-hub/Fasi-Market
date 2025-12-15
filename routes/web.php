@@ -4,6 +4,16 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Http\Controllers\PaymentController;
+
+// Public webhook endpoint — no middleware, no prefix
+Route::post('/webhook', [PaymentController::class, 'handleWebhook']);
+
+// Then your existing routes...
+Route::get('/', function () {
+    return view('welcome');
+});
+
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -67,4 +77,15 @@ Route::get('/onboard-farmer/{id}', function ($id) {
     ]);
 
     return redirect($accountLink->url);
+});
+// TEMPORARY DEBUG ROUTE — REMOVE LATER
+use App\Models\Order;
+Route::get('/test-update-order/{id}', function ($id) {
+    $order = Order::find($id);
+    if (!$order) {
+        return "Order $id not found";
+    }
+    $order->status = 'paid';
+    $order->save();
+    return "✅ Order $id updated to 'paid'!";
 });

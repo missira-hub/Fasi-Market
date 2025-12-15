@@ -74,80 +74,72 @@ class OrderController extends Controller
 /**
  * Checkout all items in cart
  */
+// OrderController.php
+
+
 public function checkout(Request $request)
 {
-    $user = $request->user();
-
-    // ✅ Only validate fields you actually send from Vue
     $request->validate([
-        'full_address'    => 'required|string|max:500',
-        'delivery_method' => 'required|in:delivery,pickup', // Must match Vue values
+        'full_address' => 'required|string',
+        'delivery_method' => 'required|in:delivery,pickup',
+        'payment_method' => 'required|in:card,cod'
     ]);
 
-    $cartItems = Cart::with('product')->where('user_id', $user->id)->get();
+    $user = auth()->user();
+
+    // 1. Create the order
+    $order = Order::create([
+        'user_id' => $user->id,
+        'full_address' => $request->full_address,
+        'delivery_method' => $request->delivery_method,
+        'status' => 'pending',
+        'total_price' => 0,
+    ]);
+
+    // 2. Load user's cart
+    $cartItems = Cart::where('user_id', $user->id)->with('product')->get();
 
     if ($cartItems->isEmpty()) {
-        return response()->json(['error' => 'Your cart is empty'], 400);
+        return response()->json(['error' => 'Cart is empty'], 400);
     }
 
-    // 🔒 Remove invalid cart items (product deleted)
-    $validCartItems = $cartItems->filter(fn($item) => $item->product !== null);
-    if ($validCartItems->isEmpty()) {
-        return response()->json(['error' => 'All items in your cart are no longer available.'], 400);
-    }
+    $total = 0;
 
-    $total = $validCartItems->sum(fn($item) => $item->product->price * $item->quantity);
+    // 3. Insert into order_items
+    foreach ($cartItems as $cartItem) {
+        if (!$cartItem->product) continue;
 
-    DB::beginTransaction();
-    try {
-        $order = Order::create([
-            'user_id'         => $user->id,
-            'total_price'     => $total,
-            'status'          => 'pending',
-            'delivery_method' => $request->delivery_method,
-        ]);
+        $price = $cartItem->product->price;
+        $quantity = $cartItem->quantity;
 
-        foreach ($validCartItems as $item) {
-            if ($item->product->quantity < $item->quantity) {
-                throw new \Exception("Insufficient stock for {$item->product->name}");
-            }
-
-            OrderItem::create([
-                'order_id'   => $order->id,
-                'product_id' => $item->product_id,
-                'quantity'   => $item->quantity,
-                'price'      => $item->product->price,
-            ]);
-        }
-
-        // ✅ Only save full_address (you don't send city/postal/phone separately)
-        OrderAddress::create([
-            'order_id'     => $order->id,
-            'full_address' => $request->full_address,
-            'city'         => null,           // Optional: parse from full_address later
-            'postal_code'  => null,           // Optional
-            'phone'        => $user->phone ?? null, // Use user's phone if available
-        ]);
-
-        Cart::where('user_id', $user->id)->delete();
-
-        DB::commit();
-
-        return response()->json([
-            'message'  => 'Order created. Proceed to payment.',
+        DB::table('order_items')->insert([
             'order_id' => $order->id,
-            'total'    => $total
+            'product_id' => $cartItem->product_id,
+            'quantity' => $quantity,
+            'price' => $price, // ← Must match your DB column name
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
-    } catch (\Exception $e) {
-        DB::rollBack();
-        \Log::error('Checkout failed: ' . $e->getMessage());
-        return response()->json([
-            'error' => 'Checkout failed. Please try again.',
-            'details' => $e->getMessage()
-        ], 500);
+        $total += $price * $quantity;
     }
+
+    // 4. Update total
+    $order->total_price = $total;
+    $order->save();
+
+    // 5. Clear cart
+    $cartItems->each->delete();
+
+    return response()->json([
+        'message' => 'Order created',
+        'order_id' => $order->id
+    ]);
 }
+
+
+
+
    public function userOrders()
 {
     $orders = Order::with('items.product')

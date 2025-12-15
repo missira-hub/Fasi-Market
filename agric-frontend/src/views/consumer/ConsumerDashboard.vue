@@ -710,6 +710,10 @@
     <p>No orders found.</p>
   </div>
 </section>
+
+
+
+
 <section v-if="section === 'feedback' && !loading" class="feedback-section">
   <h2 class="section-title">Feedback</h2>
 
@@ -1279,7 +1283,6 @@ function handleClickOutside(event) {
 
 // Update onMounted
 onMounted(() => {
-  loadConversations()
   document.addEventListener('click', handleClickOutside)
 })
 
@@ -1383,7 +1386,16 @@ const loadConversations = async () => {
     loadingConversations.value = false;
   }
 };
-
+const smoothScrollToBottom = async () => {
+  await nextTick()
+  const el = messagesContainer.value
+  if (el) {
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: 'smooth'
+    })
+  }
+}
 
 const selectConversation = async (conv) => {
   // Move this conversation to the top of the list
@@ -1430,12 +1442,11 @@ const selectConversation = async (conv) => {
   }
 };
 
+
 const sendMessage = async () => {
   if ((!newMessage.value.trim() && !selectedFile.value) || !currentConversation.value) return
 
   const tempMessageText = newMessage.value.trim()
-
-  // Get reply context if available
   const replyContext = replyMessage.value
     ? {
         reply_to_message_id: replyMessage.value.id,
@@ -1444,24 +1455,32 @@ const sendMessage = async () => {
       }
     : null
 
+  // ✅ Get current user's name and avatar
+  const currentUser = authStore.user
+  const currentUserName = currentUser?.name || 'You'
+  const currentUserAvatar = profilePictureUrl.value || defaultAvatar
+
   const msg = {
     id: Date.now(),
     message_text: tempMessageText,
     sender_id: userId.value,
+    // ✅ Inject sender info immediately
+    sender: {
+      id: userId.value,
+      name: currentUserName,
+      avatar_url: currentUserAvatar,
+    },
     created_at: new Date().toISOString(),
     attachment_url: selectedFile.value ? URL.createObjectURL(selectedFile.value) : null,
-    // ✅ Attach full reply context for display
     reply_to_message_id: replyContext?.reply_to_message_id || null,
     reply_to_sender_name: replyContext?.reply_to_sender_name || null,
     reply_to_message_text: replyContext?.reply_to_message_text || null
   }
 
+  // ✅ Push to UI with correct sender info
   currentConversation.value.messages.push(msg)
 
-  // ✅ Clear floating reply bar
   replyMessage.value = null
-
-  // Reset input
   newMessage.value = ''
   selectedFile.value = null
 
@@ -1470,53 +1489,30 @@ const sendMessage = async () => {
     const formData = new FormData()
     formData.append('conversation_id', currentConversation.value.id)
     formData.append('message_text', tempMessageText)
-
-    // Optional: send reply_to_message_id to backend if needed
     if (replyContext?.reply_to_message_id) {
       formData.append('reply_to_message_id', replyContext.reply_to_message_id)
     }
-
     if (selectedFile.value) {
       formData.append('attachment', selectedFile.value)
     }
 
-    const res = await axios.post(
-      '/api/messages',
-      formData,
-      { 
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        } 
+    const res = await axios.post('/api/messages', formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
       }
-    )
+    })
 
+    // Update with backend response (optional)
     Object.assign(msg, res.data)
+
     await loadConversations()
-    scrollToBottom()
+    await smoothScrollToBottom()
   } catch (e) {
     console.error('Failed to send message', e)
   }
 }
 
-
-// --- Smooth Scrolling Logic
-const smoothScrollToBottom = async () => {
-  await nextTick()
-  const el = messagesContainer.value
-  if (el) {
-    el.scrollTo({
-      top: el.scrollHeight,
-      behavior: 'smooth'
-    })
-  }
-}
-
-// Watch for new messages dynamically
-watch(
-  () => currentConversation.value?.messages?.length,
-  () => smoothScrollToBottom()
-)
 
 // Delete an entire conversation
 const deleteConversation = async (conversationId) => {
@@ -1566,10 +1562,7 @@ const groupedMessages = computed(() => {
   return groups
 })
 
-// --- Lifecycle
-onMounted(() => {
-  loadConversations()
-})
+
 
 // ✅ Unified payment processing state (use ONE name)
 const paymentProcessing = ref(false);
@@ -1755,10 +1748,6 @@ const fetchUserProfile = async () => {
   }
 }
 
-// Initialize on component mount
-onMounted(() => {
-  fetchUserProfile()
-})
 
 
 const updateProfile = async (form) => {
@@ -2086,19 +2075,6 @@ async function saveEdit(index, reviewId) {
   }
 }
 
-// ✅ Fetch reviews on component mount
-onMounted(() => {
-   // ✅ Check if user just returned from Stripe Checkout
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.has('session_id')) {
-    // Clear the URL param to avoid re-triggering
-    router.replace({ query: {} });
-    // ✅ REFRESH ORDERS AFTER PAYMENT
-    fetchOrders();
-  }
-  fetchReviews();
-  fetchAllReviews();
-});
 
 
 
@@ -2203,11 +2179,54 @@ const fetchOrders = async () => {
   }
 };
 
-// Fetch orders when the component mounts
-onMounted(() => {
-  if (section.value === 'orders') {
-    fetchOrders();
+
+onMounted(async () => {
+  // 🔹 1. Handle Stripe redirect (if returning from payment)
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('session_id')) {
+    const sessionId = urlParams.get('session_id');
+    router.replace({ query: {} }); // clean URL
+
+    try {
+      // Verify session status
+      const sessionRes = await axios.get(`/api/checkout-session/${sessionId}`);
+      if (sessionRes.data.payment_status === 'paid') {
+        // ✅ IMMEDIATELY mark order as paid (prevents "Pay Now" reappearing)
+        await axios.post('/api/confirm-payment', { session_id: sessionId });
+        // Now refresh orders — it will show "paid"
+        await fetchOrders();
+        showNotifications('✅ Payment confirmed!');
+      }
+    } catch (err) {
+      console.error('Payment verification failed:', err);
+      globalError.value = 'Could not verify payment.';
+    }
   }
+
+  // 🔹 2. Auth & token setup
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('Please log in first.');
+    return router.push('/login');
+  }
+  setAuthToken();
+
+  // 🔹 3. Fetch ALL initial data in parallel (faster load)
+  await Promise.all([
+    fetchUserProfile(),
+    fetchProducts(),
+    fetchCart(),
+    fetchOrders(),
+    fetchCartTotal(),
+    fetchCategories(),
+    fetchUnits(),
+    fetchReviews(),
+    fetchAllReviews()
+  ]);
+
+  // 🔹 4. Messaging setup
+  await loadConversations();
+  document.addEventListener('click', handleClickOutside);
 });
 
 // Shows number of distinct products in cart (not total quantity)

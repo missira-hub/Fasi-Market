@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Homepage.vue'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
+import ForgotPassword from '../views/ForgotPassword.vue'
 
 import ConsumerDashboard from '../views/consumer/ConsumerDashboard.vue'
 import ProductList from '../views/consumer/ProductList.vue'
@@ -42,6 +43,8 @@ const routes = [
   { path: '/contact', name: 'Contact', component: Contact },
 
   { path: '/login', name: 'Login', component: Login },
+    { path: '/forgot-password', component: ForgotPassword },
+
   { path: '/register', name: 'Register', component: Register },
 
   // Consumer routes

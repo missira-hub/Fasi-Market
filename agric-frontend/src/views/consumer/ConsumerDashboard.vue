@@ -238,17 +238,23 @@
                       <div class="message-content">
                         {{ msg.message_text || msg.message }}
                         <!-- Display images/files if present -->
-                        <div v-if="msg.attachment_url" class="attachment-preview">
-                          <img
-                            v-if="isImage(msg.attachment_url)"
-                            :src="msg.attachment_url"
-                            alt="Attachment"
-                            class="attached-image"
-                          />
-                          <div v-else class="file-attachment">
-                            📎 {{ getFileName(msg.attachment_url) }}
-                          </div>
-                        </div>
+                       <div v-if="msg.attachment_url" class="attachment-preview">
+  <img
+    v-if="isImage(msg.attachment_url)"
+    :src="msg.attachment_url"
+    alt="Attachment"
+    class="attached-media"
+  />
+  <video
+    v-else-if="isVideo(msg.attachment_url)"
+    :src="msg.attachment_url"
+    controls
+    class="attached-media"
+  />
+  <div v-else class="file-attachment">
+    📎 {{ getFileName(msg.attachment_url) }}
+  </div>
+</div>
                       </div>
 
                       <div class="message-meta">
@@ -289,7 +295,19 @@
           </div>
           <div class="reply-content">{{ replyMessage.text }}</div>
         </div>
-
+<!-- File Preview -->
+<div v-if="selectedFilePreview" class="file-preview">
+  <div v-if="isImage(selectedFilePreview.url)" class="preview-image">
+    <img :src="selectedFilePreview.url" alt="Preview" />
+  </div>
+  <div v-else-if="isVideo(selectedFilePreview.url)" class="preview-video">
+    <video :src="selectedFilePreview.url" controls />
+  </div>
+  <div v-else class="preview-file">
+    📎 {{ selectedFilePreview.name }}
+  </div>
+  <button @click="clearFilePreview" class="remove-preview">×</button>
+</div>
         <!-- Fixed input row -->
         <div class="input-row">
           <div class="input-tools">
@@ -327,6 +345,28 @@
       </div>
     </div>
   </div>
+  <!-- Forward Message Modal -->
+<div v-if="showForwardModal" class="custom-confirm-overlay">
+  <div class="forward-modal">
+    <div class="modal-header">
+      <h3>Forward Message</h3>
+      <button @click="showForwardModal = false" class="close-modal">×</button>
+    </div>
+    <p>Select a conversation to forward to:</p>
+    <ul class="forward-recipient-list">
+      <li
+        v-for="conv in conversations"
+        :key="conv.id"
+        @click="confirmForward(conv)"
+        class="forward-recipient-item"
+      >
+        <img :src="getConversationAvatar(conv)" class="avatar" />
+        <span>{{ getConversationTitle(conv) }}</span>
+      </li>
+    </ul>
+    <button @click="showForwardModal = false" class="btn-cancel">Cancel</button>
+  </div>
+</div>
 </section>
 
   <!-- Example notification component -->
@@ -402,7 +442,7 @@
 
 <!-- Quantity with unit -->
 <p>
-  <strong>In Stock:</strong> {{ product.quantity }}
+  <strong>Quantity:</strong> {{ product.quantity }}
   <span v-if="product.unit"> {{ product.unit.abbreviation }}</span>
 </p>
 
@@ -786,14 +826,76 @@
         <h3>Delivery Information</h3>
 
         <label for="full-address">Full Delivery Address</label>
-        <textarea
-          id="full-address"
-          v-model="fullAddress"
-          placeholder="e.g., 123 Main St, Istanbul, 34000, Turkey"
-          class="address-input"
-          :disabled="paymentProcessing"
-          required
-        ></textarea>
+       <!-- Customer Contact -->
+<div class="customer-contact">
+  <h3>Contact Information</h3>
+  <div class="form-row">
+    <div class="form-group">
+      <label for="customer-phone">Phone Number *</label>
+      <input
+        id="customer-phone"
+        v-model="customerPhone"
+        type="tel"
+        placeholder="+90 555 123 45 67"
+        :disabled="paymentProcessing"
+        required
+      />
+    </div>
+  </div>
+</div>
+
+<!-- Delivery Address -->
+<div class="delivery-info">
+  <h3>Delivery Address</h3>
+  <div class="form-row">
+    <div class="form-group">
+      <label for="address-street">Street Address *</label>
+      <input
+        id="address-street"
+        v-model="address.street"
+        type="text"
+        placeholder="e.g., 123 Main St"
+        :disabled="paymentProcessing"
+        required
+      />
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label for="address-city">City *</label>
+      <input
+        id="address-city"
+        v-model="address.city"
+        type="text"
+        placeholder="e.g., Istanbul"
+        :disabled="paymentProcessing"
+        required
+      />
+    </div>
+    <div class="form-group">
+      <label for="address-postal">Postal Code</label>
+      <input
+        id="address-postal"
+        v-model="address.postal_code"
+        type="text"
+        placeholder="e.g., 34000"
+        :disabled="paymentProcessing"
+      />
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label for="address-country">Country *</label>
+      <select v-model="address.country" :disabled="paymentProcessing" required>
+        <option value="">Select country</option>
+        <option value="Turkey">Turkey</option>
+        <option value="Cyprus">Cyprus</option>
+        <option value="United States">United States</option>
+        <!-- Add more as needed -->
+      </select>
+    </div>
+  </div>
+</div>
 
       <label for="delivery-method">Delivery Method</label>
 <select v-model="deliveryMethod">
@@ -911,7 +1013,7 @@ const counter = ref(0)
 // ✅ Add these refs
 const isContactOnline = ref(false);
 const lastSeenTime = ref(null);
-
+const replyMessage = ref(null); // ✅ This is missing!
 
 const section = ref("market");      
 
@@ -987,8 +1089,8 @@ const loadingConversations = ref(false)
 const loadingMessages = ref(false)
 const messagesContainer = ref(null)
 const showEmojiPicker = ref(false)
-const selectedFile = ref(null)
-const replyMessage = ref(null)
+const selectedFile = ref(null);        // the actual File object
+const selectedFilePreview = ref(null); // { url: string, name: string }const replyMessage = ref(null)
 const selectedMessageId = ref(null)
 const fileInput = ref(null)
 const authStore = useAuthStore()
@@ -1029,21 +1131,25 @@ function getAvatarUrl(userId, name) {
 
 
 function getSenderAvatar(message) {
-  // First try to get avatar from message sender if available
-  if (message.sender_avatar_url) return message.sender_avatar_url
-  if (message.sender?.name) return getAvatarUrl(message.sender_id, message.sender.name)
-  
-  // Fallback to conversation participant avatar
-  const conv = currentConversation.value
-  if (conv?.participants) {
-    const participant = conv.participants.find(p => p.id === message.sender_id)
-    if (participant?.avatar_url) {
-      return participant.avatar_url
+  // First, try message-level avatar
+  if (message.sender_avatar_url) return message.sender_avatar_url;
+
+  // Try sender info from message
+  if (message.sender?.name && message.sender_id != null) {
+    return getAvatarUrl(message.sender_id, message.sender.name);
+  }
+
+  // Fallback: get from conversation participants
+  const conv = currentConversation.value;
+  if (conv?.participants && message.sender_id != null) {
+    const participant = conv.participants.find(p => Number(p.id) === Number(message.sender_id));
+    if (participant?.name) {
+      return getAvatarUrl(participant.id, participant.name);
     }
   }
-  
-  // Fallback to conversation avatar
-  return getConversationAvatar(conv)
+
+  // Final fallback
+  return getAvatarUrl("0", "User");
 }
 
 function getInitials(name) {
@@ -1195,10 +1301,34 @@ function replyToMessage(message) {
 function cancelReply() {
   replyMessage.value = null
 }
+// Add near your other refs
+const forwardingMessage = ref(null); // holds the message being forwarded
+const showForwardModal = ref(false); // controls modal visibility
 
 function forwardMessage(message) {
-  alert(`Forwarding: ${message.message_text || message.message}`)
-  selectedMessageId.value = null
+  forwardingMessage.value = message;
+  showForwardModal.value = true;
+  selectedMessageId.value = null;
+}
+async function confirmForward(targetConv) {
+  showForwardModal.value = false;
+
+  if (!forwardingMessage.value) return;
+
+  try {
+    // Switch to the target conversation
+    await selectConversation(targetConv);
+
+    // Pre-fill input with forwarded message
+    newMessage.value = `[Forwarded] ${forwardingMessage.value.message_text || forwardingMessage.value.message}`;
+
+    showNotifications(`Message ready to send to ${getConversationTitle(targetConv)}`, 'info');
+  } catch (err) {
+    console.error('Forward failed:', err);
+    showNotifications('Could not forward message.', 'error');
+  }
+
+  forwardingMessage.value = null;
 }
 
 
@@ -1260,11 +1390,28 @@ function openFilePicker() {
 }
 
 function handleFileSelect(event) {
-  const files = event.target.files
-  if (files.length > 0) {
-    selectedFile.value = files[0]
-    // You can implement file upload logic here
+  const file = event.target.files[0];
+  if (!file) return;
+
+  selectedFile.value = file;
+
+  const url = URL.createObjectURL(file);
+  selectedFilePreview.value = {
+    url: url,
+    name: file.name
+  };
+}
+function isVideo(url) {
+  return /\.(mp4|webm|ogg)$/i.test(url);
+}
+
+function clearFilePreview() {
+  if (selectedFilePreview.value?.url) {
+    URL.revokeObjectURL(selectedFilePreview.value.url);
   }
+  selectedFile.value = null;
+  selectedFilePreview.value = null;
+  if (fileInput.value) fileInput.value.value = '';
 }
 
 // Add this function to handle clicks outside the options menu
@@ -1442,58 +1589,59 @@ const selectConversation = async (conv) => {
   }
 };
 
-
 const sendMessage = async () => {
-  if ((!newMessage.value.trim() && !selectedFile.value) || !currentConversation.value) return
+  if ((!newMessage.value.trim() && !selectedFile.value) || !currentConversation.value) return;
 
-  const tempMessageText = newMessage.value.trim()
+  // --- PREP TEMP MESSAGE FOR UI ---
+  const tempMessageText = newMessage.value.trim();
   const replyContext = replyMessage.value
     ? {
         reply_to_message_id: replyMessage.value.id,
         reply_to_sender_name: replyMessage.value.sender,
         reply_to_message_text: replyMessage.value.text
       }
-    : null
+    : null;
 
-  // ✅ Get current user's name and avatar
-  const currentUser = authStore.user
-  const currentUserName = currentUser?.name || 'You'
-  const currentUserAvatar = profilePictureUrl.value || defaultAvatar
+  const currentUser = authStore.user;
+  const currentUserName = currentUser?.name || 'You';
+  const currentUserAvatar = profilePictureUrl.value || defaultAvatar;
 
-  const msg = {
+  // Use file preview URL for immediate UI feedback
+  const previewUrl = selectedFilePreview.value?.url || null;
+
+  const tempMsg = {
     id: Date.now(),
     message_text: tempMessageText,
     sender_id: userId.value,
-    // ✅ Inject sender info immediately
     sender: {
       id: userId.value,
       name: currentUserName,
       avatar_url: currentUserAvatar,
     },
     created_at: new Date().toISOString(),
-    attachment_url: selectedFile.value ? URL.createObjectURL(selectedFile.value) : null,
+    attachment_url: previewUrl, // temporary blob URL (only for YOU)
     reply_to_message_id: replyContext?.reply_to_message_id || null,
     reply_to_sender_name: replyContext?.reply_to_sender_name || null,
     reply_to_message_text: replyContext?.reply_to_message_text || null
-  }
+  };
 
-  // ✅ Push to UI with correct sender info
-  currentConversation.value.messages.push(msg)
+  currentConversation.value.messages.push(tempMsg);
+  replyMessage.value = null;
+  newMessage.value = '';
+  clearFilePreview(); // reset after adding to UI
 
-  replyMessage.value = null
-  newMessage.value = ''
-  selectedFile.value = null
-
+  // --- SEND TO BACKEND ---
   try {
-    const token = localStorage.getItem('token')
-    const formData = new FormData()
-    formData.append('conversation_id', currentConversation.value.id)
-    formData.append('message_text', tempMessageText)
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('conversation_id', currentConversation.value.id);
+    if (tempMessageText) formData.append('message_text', tempMessageText);
+
     if (replyContext?.reply_to_message_id) {
-      formData.append('reply_to_message_id', replyContext.reply_to_message_id)
+      formData.append('reply_to_message_id', replyContext.reply_to_message_id);
     }
     if (selectedFile.value) {
-      formData.append('attachment', selectedFile.value)
+      formData.append('attachment', selectedFile.value);
     }
 
     const res = await axios.post('/api/messages', formData, {
@@ -1501,17 +1649,22 @@ const sendMessage = async () => {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data'
       }
-    })
+    });
 
-    // Update with backend response (optional)
-    Object.assign(msg, res.data)
+    // ✅ REPLACE TEMP MESSAGE with actual backend data (especially real attachment_url)
+    const index = currentConversation.value.messages.findIndex(m => m.id === tempMsg.id);
+    if (index !== -1) {
+      currentConversation.value.messages[index] = { ...currentConversation.value.messages[index], ...res.data };
+    }
 
-    await loadConversations()
-    await smoothScrollToBottom()
+    await loadConversations();
+    await smoothScrollToBottom();
   } catch (e) {
-    console.error('Failed to send message', e)
+    console.error('Failed to send message', e);
+    // Optional: remove temp message or mark as failed
+    showNotifications('Failed to send message.', 'error');
   }
-}
+};
 
 
 // Delete an entire conversation
@@ -1570,7 +1723,16 @@ const paymentError = ref(null);
 const fullAddress = ref('');
 const selectedPaymentMethod = ref('card'); // ← Add this ref if not already present
 
+// Customer contact
+const customerPhone = ref('')
 
+// Structured address
+const address = reactive({
+  street: '',
+  city: '',
+  postal_code: '',
+  country: 'Turkey' // default
+})
 // ✅ Load Stripe
 const stripePromise = loadStripe('pk_test_51RpdA0H7s9nJbI2dsiOJmgCJkE0Z6TgQhv7eThKVDPjTxqSmzHWXMetbcUwYUFZGSuvi47TTCMvwOGRXAGGKpq9700BGtC5EvM');
 
@@ -1578,69 +1740,88 @@ const stripePromise = loadStripe('pk_test_51RpdA0H7s9nJbI2dsiOJmgCJkE0Z6TgQhv7eT
 
 const deliveryMethod = ref(''); // will be 'delivery' or 'pickup'
 
-
 const processPayment = async () => {
-  // 1. Validate delivery info
-  if (!fullAddress.value?.trim()) {
-    paymentError.value = 'Please enter your full delivery address.';
+  // --- VALIDATION ---
+  if (!customerPhone.value?.trim()) {
+    paymentError.value = 'Please enter your phone number.';
     return;
   }
+
+  if (!address.street?.trim()) {
+    paymentError.value = 'Please enter your street address.';
+    return;
+  }
+
+  if (!address.city?.trim()) {
+    paymentError.value = 'Please enter your city.';
+    return;
+  }
+
+  if (!address.country) {
+    paymentError.value = 'Please select your country.';
+    return;
+  }
+
   if (!deliveryMethod.value || !['delivery', 'pickup'].includes(deliveryMethod.value)) {
     paymentError.value = 'Please select a valid delivery method.';
     return;
   }
+
+  // Clear any previous error
   paymentError.value = null;
   paymentProcessing.value = true;
 
   try {
-    if (selectedPaymentMethod.value === 'card') {
-      // --- STRIPE PAYMENT WITH SPLIT ---
-      const orderResponse = await axios.post(
-        '/api/checkout',
-        {
-          full_address: fullAddress.value.trim(),
-          delivery_method: deliveryMethod.value, // ✅ now 'delivery' or 'pickup'
-          payment_method: 'card'
-        },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-      );
+    const payload = {
+      customer_phone: customerPhone.value.trim(),
+      address: {
+        street: address.street.trim(),
+        city: address.city.trim(),
+        postal_code: address.postal_code?.trim() || '',
+        country: address.country
+      },
+      delivery_method: deliveryMethod.value,
+      payment_method: selectedPaymentMethod.value
+    };
 
-      // Create Stripe session with split
+    if (selectedPaymentMethod.value === 'card') {
+      // 1. Create order with structured data
+      const orderResponse = await axios.post('/api/checkout', payload, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+
+      // 2. Create Stripe session
       const sessionResponse = await axios.post(
         '/api/create-checkout-session',
-        {
-          order_id: orderResponse.data.order_id
-        },
+        { order_id: orderResponse.data.order_id },
         { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
       );
 
+      // 3. Redirect to Stripe
       const stripe = await stripePromise;
       const { error } = await stripe.redirectToCheckout({
         sessionId: sessionResponse.data.sessionId
       });
+
       if (error) {
         paymentError.value = error.message;
       }
     } else if (selectedPaymentMethod.value === 'cod') {
-      // --- CASH ON DELIVERY ---
-      await axios.post(
-        '/api/checkout',
-        {
-          full_address: fullAddress.value.trim(),
-          delivery_method: deliveryMethod.value,
-          payment_method: 'cod'
-        },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-      );
+      // Cash on Delivery: just create the order
+      await axios.post('/api/checkout', payload, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+
+      // Success feedback
       showNotifications('✅ Order placed successfully! You will pay on delivery.');
       section.value = 'orders';
       await fetchOrders();
     }
   } catch (err) {
-    console.error('Payment error:', err);
+    console.error('Payment failed:', err);
     paymentError.value =
-      err.response?.data?.errors?.delivery_method?.[0] ||
       err.response?.data?.message ||
+      err.response?.data?.error ||
       'An unexpected error occurred. Please try again.';
   } finally {
     paymentProcessing.value = false;
@@ -2591,7 +2772,7 @@ const uniqueAvailableUnits = computed(() => {
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 0.5rem;
+            padding: 0.25rem;
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.2s ease;
@@ -2781,7 +2962,7 @@ const uniqueAvailableUnits = computed(() => {
   padding: 8px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 16px;
   text-align: center;
 }
 
@@ -2792,7 +2973,7 @@ const uniqueAvailableUnits = computed(() => {
   padding: 8px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 16px;
   background-color: white;
   cursor: pointer;
 }
@@ -2837,6 +3018,7 @@ const uniqueAvailableUnits = computed(() => {
 
 
 .message-farmer-btn {
+      width: 100%;
   margin-top: 12px;
   padding: 8px 65px;
   background-color: #a8a00fff;; /* Emerald green */
@@ -3468,16 +3650,16 @@ const uniqueAvailableUnits = computed(() => {
 .payment-section {
   background: #ffffff;
   border-radius: 16px;
-  padding: 2rem;
+  padding: 8rem;
   max-width: 500px;
-  margin:2rem auto 3rem; /* No top margin — flows naturally after header */
+  margin:5rem auto 3rem; /* No top margin — flows naturally after header */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   border: 1px solid #e2e8f0;
   width: 100%;
 }
 .payment-section h2 {
   text-align: center;
-  font-size: 1.75rem;
+  font-size: 1.85rem;
   font-weight: 700;
   color: #1e293b;
   margin-bottom: 1.5rem;
@@ -3604,12 +3786,12 @@ const uniqueAvailableUnits = computed(() => {
 
 /* Much lower */
 .payment-section.lower-top {
-    top: 150px;
+    top: 170px;
 }
 
 /* Center of screen */
 .payment-section.center-screen {
-    top: 50%;
+    top: 70%;
     transform: translate(-50%, -50%);
 }
 
@@ -3726,7 +3908,7 @@ body.payment-active {
         max-width: 100%;
         margin: 0;
         border-radius: 0;
-        padding: 1.5rem;
+        padding: 1.8rem;
     }
     
     .payment-section-static {
@@ -3737,7 +3919,7 @@ body.payment-active {
     }
     
     body.payment-active {
-        padding-top: 150px; /* Adjust for mobile */
+        padding-top: 170px; /* Adjust for mobile */
     }
 }
 
@@ -3761,12 +3943,11 @@ body.payment-active {
   bottom: 80px;
   left: 0;
   right: 0;
-  background: #f0fdf4; /* Light green background */
+  background: #f3f7f5ff; /* Light green background */
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
-  z-index: 900;
   padding: 10px;
 }
 
@@ -3774,7 +3955,7 @@ body.payment-active {
   display: flex;
   width: 100%;
   height: 85vh;
-  background: #ffffff;
+  background: #0d0d0dff;
   border-radius: 0; /* Removed rounded corners */
   overflow: hidden;
   box-shadow: none; /* Removed shadow */
@@ -3789,7 +3970,7 @@ body.payment-active {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: #166534;
+  color: #1dd563ff;
 }
 
 .conversation-header {
@@ -4324,6 +4505,13 @@ body.payment-active {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+}
+.attached-media {
+  max-width: 180px;
+  max-height: 180px;
+  border-radius: 0;
+  object-fit: cover;
+  border: 1px solid #dcfce7;
 }
 
 .input-row {
@@ -5270,5 +5458,71 @@ body.payment-active {
   align-items: center;
   justify-content: center;
   box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.forward-modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-header h3 {
+  margin: 0;
+  color: #1e293b;
+}
+.close-modal {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #94a3b8;
+}
+.forward-recipient-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  max-height: 300px;
+}
+.forward-recipient-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.forward-recipient-item:hover {
+  background: #f1f5f9;
+}
+.forward-recipient-item .avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.forward-recipient-item span {
+  color: #1e293b;
+  font-weight: 500;
+}
+.btn-cancel {
+  padding: 10px;
+  background: #f1f5f9;
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  cursor: pointer;
+  font-weight: 500;
+  color: #64748b;
 }
     </style>

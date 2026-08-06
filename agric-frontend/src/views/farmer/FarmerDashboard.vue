@@ -49,8 +49,7 @@
 
 
       <!-- Scrollable Main Content -->
-      <main class="main-content">
-        <ProfileModal
+<main class="main-content" :class="{ 'sidebar-open': !sidebarHidden }">        <ProfileModal
           v-if="profileModalOpen"
           @close="closeProfileModal"
           @updated="onProfileUpdated"
@@ -667,62 +666,56 @@
         </section>
 
 
-        
-        <!-- Sales History Section -->
-        <section v-if="section === 'sales'" class="content-section">
-          <h2>📦 Sales History</h2>
-          <div v-if="salesLoading" class="loading">Loading sales data...</div>
-          <div v-else-if="sales.length > 0" class="sales-grid">
-            <div v-for="sale in sales" :key="sale.id" class="sale-card">
-              <!-- Product Image & Info -->
-              <div class="sale-header">
-                <img
-                  v-if="sale.product?.image"
-                  :src="`http://127.0.0.1:8000/storage/${sale.product.image}`"
-                  :alt="sale.product.name"
-                  class="sale-product-image"
-                  @error="useFallbackImage"
-                />
-                <div v-else class="sale-product-image placeholder">🖼️</div>
-                <div class="sale-details">
-                  <h3>{{ sale.product?.name || 'Unknown Product' }}</h3>
-                  <p class="farmer">
-                    <strong>Farmer:</strong> {{ sale.product?.user?.name || 'You' }}
-                  </p>
-                  <p class="category" v-if="sale.product?.category">
-                    <strong>Category:</strong> {{ sale.product.category.name }}
-                  </p>
-                </div>
-              </div>
-              <!-- Sales Stats -->
-              <div class="sale-stats">
-                <div class="stat">
-                  <span class="label">Price</span>
-                  <span class="value">₺{{ sale.unit_price }}</span>
-                </div>
-                <div class="stat">
-                  <span class="label">Qty</span>
-                  <span class="value">
-                    {{ sale.quantity }}
-                    <span v-if="sale.product?.unit"> {{ sale.product.unit.abbreviation }}</span>
-                  </span>
-                </div>
-                <div class="stat">
-                  <span class="label">Total</span>
-                  <span class="value">₺{{ sale.total_price }}</span>
-                </div>
-              </div>
-              <!-- Order & Date -->
-              <div class="sale-meta">
-                <span>Order #{{ sale.order_id }}</span>
-                <span>{{ formatDate(sale.created_at) }}</span>
-              </div>
+       <!-- Sales History Section (Grouped by Order) -->
+<section v-if="section === 'sales'" class="content-section">
+  <h2>📦 Sales History</h2>
+  <div v-if="salesLoading" class="loading">Loading sales data...</div>
+  <div v-else-if="groupedSales.length > 0" class="sales-grouped">
+    <div v-for="order in groupedSales" :key="order.order_id" class="order-sale-card">
+      <!-- Order Header -->
+      <div class="order-header">
+        <div class="order-info">
+          <h3>Order #{{ order.order_id }}</h3>
+          <p class="order-date">{{ formatDate(order.order_date) }}</p>
+          <p class="customer">Customer: {{ order.customer }}</p>
+        </div>
+        <div class="order-total">
+          <span class="total-label">Total:</span>
+          <span class="total-value">₺{{ parseFloat(order.total).toFixed(2) }}</span>
+        </div>
+      </div>
+
+      <!-- Items in this order -->
+      <div class="order-items">
+        <div v-for="item in order.items" :key="item.id" class="sale-item">
+          <img
+            v-if="item.image"
+            :src="`http://127.0.0.1:8000/storage/${item.image}`"
+            :alt="item.product_name"
+            class="item-image"
+          />
+          <div v-else class="item-image placeholder">🖼️</div>
+
+          <div class="item-details">
+            <h4>{{ item.product_name }}</h4>
+            <div class="item-meta">
+              <span>Qty: {{ item.quantity }} {{ item.unit ? item.unit : '' }}</span>
+              <span>Unit Price: ₺{{ item.unit_price }}</span>
+              <span class="item-total">Total: ₺{{ item.total_price }}</span>
             </div>
           </div>
-          <div v-else class="empty-state">
-            <p>Nothing has been sold yet.</p>
-          </div>
-        </section>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div v-else class="empty-state">
+    <p>Nothing has been sold yet.</p>
+  </div>
+</section>
+
+
+
+
         <!-- Inline Confirmation Box -->
         <div v-if="confirmBox.visible" class="confirm-overlay">
           <div class="confirm-box">
@@ -898,28 +891,24 @@ const markAsDelivered = async (orderId) => {
     showStatus(error.response?.data?.message || '❌ Failed to update status.', 'error')
   }
 }
-// ✅ Updated markAsShipped without alert()
 const markAsShipped = async (orderId) => {
-  if (!confirm('Has the order been shipped?')) return
-  try {
-    await axios.post(`/api/farmer/orders/${orderId}/status`, {
-      status: 'shipped'
-    }, {
-      headers: getAuthHeaders()
-    })
-    message.value = 'Order marked as shipped.'
-    fetchOrders()
-    // auto-clear message after 3 seconds
-    setTimeout(() => {
-      message.value = ''
-    }, 3000)
-  } catch (error) {
-    console.error('Failed to mark as shipped:', error)
-    message.value = 'Failed to mark as shipped.'
-    setTimeout(() => {
-      message.value = ''
-    }, 3000)
-  }
+  showConfirm('Has the order been shipped?', async () => {
+    try {
+      await axios.post(
+        `/api/farmer/orders/${orderId}/status`,
+        { status: 'shipped' },
+        { headers: getAuthHeaders() }
+      )
+      showStatus('✅ Order marked as shipped.', 'success')
+      fetchOrders()
+    } catch (error) {
+      console.error('Failed to mark as shipped:', error)
+      showStatus(
+        error.response?.data?.message || '❌ Failed to update status.',
+        'error'
+      )
+    }
+  })
 }
 // Print Order
 const printOrder = (order) => {
@@ -1118,6 +1107,8 @@ const submitProduct = async () => {
     showNotification('Error: ' + (err.response?.data?.message || 'Failed to submit product'))
   }
 }
+
+
 const startEdit = (product) => {
   editMode.value = true
   editingProductId.value = product.id
@@ -1133,6 +1124,8 @@ const startEdit = (product) => {
   }
   imagePreview.value = product.image_url || null
 }
+
+
 const deleteProduct = async (id) => {
   // Show custom confirmation dialog
   showConfirm('Are you sure you want to delete this product?', async () => {
@@ -1260,11 +1253,15 @@ const approveFeedback = async (id) => {
     showStatus('Could not approve feedback.', 'error')
   }
 }
+
 const deleteFeedback = (id) => {
   showConfirm('Are you sure you want to delete this feedback?', async () => {
     try {
-      await axios.delete(`/api/reviews/${id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      // ✅ FIXED: Use /feedbacks instead of /reviews
+      await axios.delete(`/api/feedbacks/${id}`, {
+        headers: { 
+          Authorization: `Bearer ${localStorage.getItem('token')}` 
+        }
       });
       showStatus('Feedback deleted successfully.', 'success');
       fetchFeedback(pagination.value.current_page);
@@ -1279,6 +1276,33 @@ const changePage = (page) => {
     fetchFeedback(page)
   }
 }
+// In your <script setup>
+
+const groupedSales = computed(() => {
+  const groups = {};
+  sales.value.forEach(sale => {
+    if (!groups[sale.order_id]) {
+      groups[sale.order_id] = {
+        order_id: sale.order_id,
+        order_date: sale.created_at,
+        customer: 'Customer', // You don’t have customer name in flat response
+        total: 0,
+        items: []
+      };
+    }
+    groups[sale.order_id].items.push({
+      id: sale.id,
+      product_name: sale.product?.name || 'Unknown',
+      quantity: sale.quantity,
+      unit_price: sale.unit_price,
+      total_price: sale.total_price,
+      image: sale.product?.image,
+      unit: sale.product?.unit?.abbreviation
+    });
+    groups[sale.order_id].total += sale.total_price;
+  });
+  return Object.values(groups).sort((a, b) => new Date(b.order_date) - new Date(a.order_date));
+});
 // Sales history
 const sales = ref([])
 const salesLoading = ref(false)
@@ -1872,19 +1896,17 @@ onUnmounted(() => {
   padding: 0;
   box-sizing: border-box;
 }
-
 /* App Container */
 .app-container {
   display: flex;
   min-height: 100%;
-  background: rgba(30, 41, 59, 0.95);
+  background: rgba(255, 255, 255, 0.95);
   font-family: 'Segoe UI', sans-serif;
-  color: white;
+  color: #1e3a8a;
   position: relative;
   width: 100vw; /* Use viewport width */
   overflow-x: hidden; /* Prevent horizontal scroll if needed */
 }
-
 /* Global reset - place in a global CSS file or App.vue <style> */
 *,
 *::before,
@@ -1893,7 +1915,6 @@ onUnmounted(() => {
   margin: 0;
   padding: 0;
 }
-
 body,
 html {
   width: 100%;
@@ -1915,31 +1936,27 @@ body, html {
   position: fixed;
   top: 90px; /* ← Start below the 100px-tall header */
   left: 0;
-  background: rgba(30, 41, 59, 0.95);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
-  color: white;
+  color: #1e3a8a;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  box-shadow: 2px 0 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 2px 0 20px rgba(30, 58, 138, 0.1);
   z-index: 1000;
   overflow-y: auto;
   transition: transform 0.3s ease;
 }
-
-
 .sidebar h2 {
   font-size: 1.5rem;
   font-weight: bold;
   color: #10b981;
   text-align: center;
 }
-
 .sidebar nav ul {
   list-style: none;
 }
-
 .sidebar nav li {
   padding: 0.75rem 1rem;
   margin: 0.5rem 0;
@@ -1950,17 +1967,16 @@ body, html {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  color: #1e3a8a;
 }
-
 .sidebar nav li:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(30, 58, 138, 0.1);
 }
-
 .sidebar nav li.active {
   background: linear-gradient(135deg, #10b981, #059669);
   box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+  color: #1e3a8a;
 }
-
 .badge {
   background: #ef4444;
   color: white;
@@ -1969,12 +1985,10 @@ body, html {
   font-size: 0.75rem;
   margin-left: auto;
 }
-
 /* Hide sidebar on small screens */
 .sidebar.sidebar-hidden {
   transform: translateX(-100%);
 }
-
 /* Main Wrapper */
 .main-wrapper {
   flex: 1;
@@ -1989,24 +2003,23 @@ body {
   margin: 0;
   padding: 0;
 }
-
 .dashboard-header {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   height: 90px; /* or 60px–80px, adjust as needed */
-  background: rgba(25, 38, 69, 0.4);
+  background: rgba(240, 249, 255, 0.95);
   backdrop-filter: blur(20px);
   padding: 0 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   z-index: 1000;
-  color: white;
+  color: #1e3a8a;
   box-sizing: border-box;
+  border-bottom: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 /* Push main content down so it doesn't hide under the fixed header */
 .main-content {
   padding-top: 100px; /* Must match header height */
@@ -2015,59 +2028,50 @@ body {
   display: flex; /* Hidden by default, shown on mobile */
   background: none;
   border: none;
-  color: white;
+  color: #1e3a8a;
   font-size: 1.5rem;
   cursor: pointer;
   margin-right: 0rem;
 }
-
 .greeting h2 {
   margin: 0;
   font-size: 1.9rem;
-  color: white;
+  color: #1e3a8a;
   font-weight: 600;
 }
-
 .greeting p {
   margin: 0rem 0 0 0;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(30, 58, 138, 0.8);
   font-size: 1.3rem;
 }
-
 .user-profile {
   width: 60px;
   height: 60px;
   border-radius: 50%;
   overflow: hidden;
   cursor: pointer;
-  border: 3px solid rgba(255, 255, 255, 0.3);
+  border: 3px solid rgba(30, 58, 138, 0.3);
   transition: all 0.3s ease;
 }
-
 .user-profile:hover {
   border-color: #10b981;
   transform: scale(1.05);
 }
-
 .profile-picture {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-
-
-
 .main-content {
   position:fixed-row;
   padding: 2rem;
   padding-top: 100px; /* ← This should be ≥ header height + some buffer */
   padding-bottom:0;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   overflow-y: auto;
-  color: white;
+  color: #1e3a8a;
 }
-
 /* Stats Grid */
 .stats-grid {
   display: grid;
@@ -2075,60 +2079,53 @@ body {
   gap: 1.5rem;
   margin-bottom: 2rem;
 }
-
 .stat-card {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   padding: 2rem;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(30, 58, 138, 0.2);
   cursor: pointer;
   transition: all 0.3s ease;
   text-align: center;
 }
-
 .stat-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 1);
 }
-
 .stat-icon {
   font-size: 2.5rem;
   margin-bottom: 1rem;
+  color: #1e3a8a;
 }
-
 .stat-number {
   font-size: 2rem;
   font-weight: bold;
-  color: white;
+  color: #1e3a8a;
   margin-bottom: 0.5rem;
 }
-
 .stat-label {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(30, 58, 138, 0.8);
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-
 /* Content Section */
 .content-section {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   padding: 2rem;
   border-radius: 20px;
   margin-bottom: 2rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .section-title {
-  color: white;
+  color: #1e3a8a;
   font-size: 1.3rem;
   font-weight: 600;
   margin-bottom: 1.5rem;
 }
-
 /* ===== DASHBOARD GRID LAYOUT ===== */
 .dashboard-grid {
   display: grid;
@@ -2136,39 +2133,35 @@ body {
   gap: 2rem;
   margin-bottom: 2rem;
 }
-
 /* ===== QUICK ACTIONS COLUMN ===== */
 .quick-actions-column {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   padding: 1.5rem;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .quick-actions-column .section-title {
-  color: white;
+  color: #1e3a8a;
   font-size: 1.3rem;
   font-weight: 600;
   margin-bottom: 1.5rem;
 }
-
 .quick-action-cards {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
 }
-
 .quick-action-card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(30, 58, 138, 0.2);
   border-radius: 12px;
   padding: 1rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: white;
+  color: #1e3a8a;
   font-weight: 500;
   transition: all 0.3s ease;
   text-align: center;
@@ -2176,84 +2169,71 @@ body {
   flex-direction: column;
   min-height: 80px;
 }
-
 .quick-action-card:hover {
   background: rgba(16, 185, 129, 0.2);
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
 }
-
 .quick-action-card span:first-child {
   font-size: 1.5rem;
 }
-
 .quick-action-card span:last-child {
   font-size: 0.9rem;
 }
-
 /* ===== RECENT ACTIVITY COLUMN ===== */
 .recent-activity-column {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   padding: 1.5rem;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .recent-activity-column .section-title {
-  color: white;
+  color: #1e3a8a;
   font-size: 1.3rem;
   font-weight: 600;
   margin-bottom: 1.5rem;
 }
-
 .activity-items {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
-
 .activity-item {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.85);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .activity-icon {
   font-size: 1.5rem;
   width: 40px;
   text-align: center;
   color: #10b981;
 }
-
 .activity-content {
   flex: 1;
 }
-
 .activity-content p {
   margin: 0;
-  color: white;
+  color: #1e3a8a;
   font-weight: 500;
 }
-
 .activity-content span {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(30, 58, 138, 0.6);
   font-size: 0.9rem;
 }
-
 .activity-value {
   color: #10b981;
   font-weight: bold;
   font-size: 1.1rem;
 }
-
 .empty-activity {
   text-align: center;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(30, 58, 138, 0.6);
   padding: 1.5rem;
   font-style: italic;
 }
@@ -2264,78 +2244,64 @@ body {
     grid-template-columns: 1fr; /* Single column */
     gap: 1.5rem; /* Slightly reduced gap */
   }
-
   /* Make Quick Actions cards full-width and single column */
   .quick-action-cards {
     grid-template-columns: 1fr; /* One card per row */
   }
-
   /* Optional: Slightly reduce padding/font for tighter mobile layout */
   .quick-actions-column,
   .recent-activity-column {
     padding: 1.25rem; /* Slightly less padding */
     border-radius: 16px; /* Slightly smaller radius */
   }
-
   .quick-actions-column .section-title,
   .recent-activity-column .section-title {
     font-size: 1.15rem; /* Slightly smaller title */
     margin-bottom: 1.25rem;
   }
-
   .quick-action-card {
     min-height: 70px; /* Slightly shorter cards */
     padding: 0.9rem;
   }
-
   .quick-action-card span:first-child {
     font-size: 1.4rem;
   }
-
   .quick-action-card span:last-child {
     font-size: 0.85rem;
   }
-
   /* Ensure activity items stay readable */
   .activity-item {
     padding: 0.9rem;
   }
-
   .activity-content p {
     font-size: 0.95rem;
   }
-
   .activity-content span {
     font-size: 0.85rem;
   }
-
   .activity-value {
     font-size: 1rem;
   }
 }
-
 /* Farmer Listings */
 .farmer-listings {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   padding: 2rem;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
 }
-
 .header h2 {
-  color: white;
+  color: #1e3a8a;
   font-size: 1.5rem;
   margin: 0;
 }
-
 .btn-primary {
   background: linear-gradient(135deg, #10b981, #059669);
   color: white;
@@ -2346,31 +2312,26 @@ body {
   font-weight: 500;
   transition: all 0.3s ease;
 }
-
 .btn-primary:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
 }
-
 .filter-controls {
   margin-bottom: 2rem;
 }
-
 .filter-controls select {
-  background: rgba(255, 255, 255, 0.1);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  color: white;
+  background: rgba(255, 255, 255, 0.85);
+  border: 2px solid rgba(30, 58, 138, 0.2);
+  color: #1e3a8a;
   padding: 0.75rem 1rem;
   border-radius: 12px;
-  font-size: 0.7rem;
+  font-size: 1rem;
   min-width: 100px;
 }
-
 .filter-controls select option {
-  background: #1e293b;
-  color: white;
+  background: #ffffff;
+  color: #1e3a8a;
 }
-
 @media (max-width: 768px) {
   /* Fix both filter dropdown and form dropdowns */
   .filter-controls select,
@@ -2381,7 +2342,6 @@ body {
     padding: 0.75rem 1rem;
     box-sizing: border-box;
   }
-
   /* Optional: stack form rows vertically on mobile */
   .form-row {
     grid-template-columns: 1fr !important;
@@ -2390,37 +2350,33 @@ body {
 }
 /* Form */
 .form {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.9);
   padding: 2rem;
   border-radius: 15px;
   margin-bottom: 2rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .form-group {
   margin-bottom: 1.5rem;
 }
-
 .form-group label {
   display: block;
-  color: white;
+  color: #1e3a8a;
   margin-bottom: 0.5rem;
   font-weight: 500;
 }
-
 .form-group input,
 .form-group textarea,
 .form-group select {
   width: 100%;
   padding: 0.75rem 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(30, 58, 138, 0.2);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1e3a8a;
   font-size: 1rem;
   transition: all 0.3s ease;
 }
-
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
@@ -2428,52 +2384,44 @@ body {
   border-color: #10b981;
   box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
 }
-
 .form-group input::placeholder,
 .form-group textarea::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(30, 58, 138, 0.5);
 }
-
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
-
 .form-actions {
   display: flex;
   gap: 1rem;
   margin-top: 2rem;
 }
-
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.8);
+  color: #1e3a8a;
+  border: 2px solid rgba(30, 58, 138, 0.3);
   padding: 0.75rem 1.5rem;
   border-radius: 12px;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.3s ease;
 }
-
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(30, 58, 138, 0.5);
 }
-
 .image-preview {
   margin-top: 1rem;
   position: relative;
 }
-
 .image-preview img {
   max-width: 200px;
   max-height: 200px;
   border-radius: 12px;
   object-fit: cover;
 }
-
 .image-preview button {
   position: absolute;
   top: 5px;
@@ -2487,84 +2435,71 @@ body {
   cursor: pointer;
   font-size: 0.8rem;
 }
-
 /* Product Grid */
 .product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.5rem;
 }
-
 .product-card {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.9);
   border-radius: 15px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(30, 58, 138, 0.2);
   transition: all 0.3s ease;
 }
-
 .product-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
 }
-
 .product-image-container {
   width: 100%;
   height: 200px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.9);
 }
-
 .product-image-container img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-
 .image-placeholder {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(30, 58, 138, 0.5);
   font-style: italic;
 }
-
 .product-info {
   padding: 1rem;
 }
-
 .product-info h3 {
-  color: white;
+  color: #1e3a8a;
   margin: 0 0 0.5rem 0;
   font-size: 1.1rem;
 }
-
 .product-info p {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(30, 58, 138, 0.7);
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.4;
 }
-
 .product-meta-beautified {
   padding: 0 1rem 1rem 1rem;
 }
-
 .meta-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
-  color: white;
+  color: #1e3a8a;
   font-size: 0.9rem;
 }
-
 .meta-item strong {
   color: #10b981;
 }
-
 .category-tag {
   background: linear-gradient(135deg, #8b5cf6, #7c3aed);
   color: white;
@@ -2574,17 +2509,14 @@ body {
   display: inline-block;
   margin: 0.5rem 0;
 }
-
 .out-of-stock {
   color: #ef4444 !important;
 }
-
 .product-actions {
   display: flex;
   gap: 0.5rem;
   margin-top: 1rem;
 }
-
 .btn-danger {
   background: linear-gradient(135deg, #ef4444, #dc2626);
   color: white;
@@ -2595,26 +2527,22 @@ body {
   font-size: 0.9rem;
   transition: all 0.3s ease;
 }
-
 .btn-danger:hover {
   transform: translateY(-1px);
   box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3);
 }
-
 .empty-state {
   text-align: center;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(30, 58, 138, 0.6);
   padding: 3rem;
   font-style: italic;
   font-size: 1.1rem;
 }
-
 /* View Feedback */
 .view-feedback h2 {
-  color: white;
+  color: #1e3a8a;
   margin-bottom: 2rem;
 }
-
 /* Feedback Cards Grid */
 .feedback-cards-grid {
   display: grid;
@@ -2622,26 +2550,23 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); /* Responsive grid */
   margin-top: 16px;
 }
-
 /* Feedback Card */
 .feedback-card {
-  background: rgba(46, 50, 77, 0.76);
+  background: rgba(231, 235, 245, 0.9);
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   border: 1px solid #eaeaea;
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-
 .feedback-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
 }
-
 /* Card Header */
 .card-header {
   padding: 16px 20px;
-  background: #3a3f5dff;
+  background: #d1d5e7;
   border-bottom: 1px solid #eee;
   display: flex;
   justify-content: space-between;
@@ -2649,16 +2574,14 @@ body {
   flex-wrap: wrap;
   gap: 8px;
 }
-
 .user-chip {
   display: flex;
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  color: #f6f6f7ff;
+  color: #1e3a8a;
   font-size: 14px;
 }
-
 .avatar {
   width: 32px;
   height: 32px;
@@ -2671,7 +2594,6 @@ body {
   font-size: 14px;
   font-weight: bold;
 }
-
 .product-tag {
   background: #f7f6f6ff;
   color: #303c6aff;
@@ -2680,14 +2602,12 @@ body {
   font-size: 12px;
   font-weight: 500;
 }
-
 /* Card Body */
 .card-body {
   padding: 20px;
-  color: #444;
+  color: #1e3a8a;
   line-height: 1.6;
 }
-
 /* Rating */
 .rating-stars {
   display: flex;
@@ -2696,17 +2616,14 @@ body {
   font-size: 18px;
   margin-bottom: 10px;
 }
-
 .rating-stars .filled {
   color: #ffc107;
 }
-
 .rating-stars small {
   color: #c3d013ff;
   margin-left: 8px;
   font-size: 12px;
 }
-
 /* Comment */
 .comment {
   font-style: italic;
@@ -2719,19 +2636,17 @@ body {
   font-size: 14px;
   line-height: 1.5;
 }
-
 /* Meta Info */
 .meta-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: #fefbfbff;
+  color: #1e3a8a;
   margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 8px;
 }
-
 .status-badge {
   padding: 4px 10px;
   border-radius: 20px;
@@ -2740,22 +2655,18 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-
 .status-badge.approved {
   background: #e8f5e9;
   color: #2e7d32;
 }
-
 .status-badge.pending {
   background: #fff8e1;
   color: #9c6b00;
 }
-
 /* Reply Section */
 .reply-section {
   margin: 16px 0;
 }
-
 .reply-box {
   background: #e8f5e8;
   border: 1px solid #c8e6c9;
@@ -2764,12 +2675,10 @@ body {
   font-size: 14px;
   color: #10abdeff;
 }
-
 .reply-text {
   margin: 6px 0 0;
   font-style: italic;
 }
-
 .reply-form textarea {
   width: 100%;
   padding: 10px;
@@ -2781,13 +2690,11 @@ body {
   margin-bottom: 8px;
   background: #fafafa;
 }
-
 .reply-form textarea:focus {
   outline: none;
   border-color: #3498db;
   background: white;
 }
-
 /* Buttons */
 .btn {
   padding: 8px 14px;
@@ -2801,41 +2708,33 @@ body {
   align-items: center;
   gap: 6px;
 }
-
 .btn.primary {
   background: #3498db;
   color: white;
 }
-
 .btn.primary:hover:not(:disabled) {
   background: #2980b9;
 }
-
 .btn.outline.approve {
   background: #e8f5e9;
   color: #2e7d32;
   border: 1px solid #a5d6a7;
 }
-
 .btn.outline.approve:hover {
   background: #c8e6c9;
 }
-
 .btn.danger {
   background: #e53935;
   color: white;
 }
-
 .btn.danger:hover {
   background: #c62828;
 }
-
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
 }
-
 /* Card Footer */
 .card-footer {
   padding: 0 20px 20px;
@@ -2843,7 +2742,6 @@ body {
   gap: 10px;
   justify-content: flex-end;
 }
-
 /* Empty State */
 .empty-state {
   text-align: center;
@@ -2851,13 +2749,11 @@ body {
   color: #aaa;
   font-size: 16px;
 }
-
 .empty-icon {
   opacity: 0.3;
   margin-bottom: 12px;
   max-width: 80px;
 }
-
 /* Pagination */
 .pagination-controls {
   margin-top: 30px;
@@ -2868,16 +2764,13 @@ body {
   font-size: 14px;
   color: #555;
 }
-
 .pagination-controls .page-info {
   font-weight: 500;
 }
-
 .pagination-controls .btn.pagination-btn {
   background: #f1f1f1;
   color: #333;
 }
-
 .pagination-controls .btn.pagination-btn:hover:not(:disabled) {
   background: #e0e0e0;
 }
@@ -2888,16 +2781,13 @@ body {
   gap: 1.2rem;
   padding: 1rem 0;
 }
-
 .order-card {
   padding: 1.5rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .order-card:last-child {
   border-bottom: none;
 }
-
 .order-header {
   display: flex;
   justify-content: space-between;
@@ -2905,108 +2795,91 @@ body {
   margin-bottom: 0.5rem;
   font-weight: 600;
 }
-
 .order-id {
-  color: white;
+  color: #1e3a8a;
   font-size: 1.1rem;
 }
-
 .order-status {
   padding: 0.25rem 0.75rem;
   border-radius: 20px;
   font-size: 0.8rem;
   font-weight: 600;
 }
-
 .order-status.pending { background: #f59e0b; color: white; }
 .order-status.paid { background: #10b981; color: white; }
 .order-status.shipped { background: #0ea5e9; color: white; }
 .order-status.delivered { background: #16a34a; color: white; }
 .order-status.cancelled { background: #ef4444; color: white; }
-
 .order-customer {
   margin: 0.5rem 0 1rem 0;
   font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(30, 58, 138, 0.9);
   line-height: 1.5;
 }
-
 .order-customer strong {
   color: #10b981;
 }
-
 .order-items {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
   margin: 1rem 0;
 }
-
 .order-item {
   display: flex;
   gap: 1rem;
   align-items: center;
 }
-
 .item-image {
   width: 50px;
   height: 50px;
   border-radius: 6px;
   object-fit: cover;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .item-details h4 {
   margin: 0 0 0.1rem 0;
-  color: white;
+  color: #1e3a8a;
   font-size: 1rem;
 }
-
 .item-details p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(30, 58, 138, 0.8);
   font-size: 0.9rem;
 }
-
 .order-summary {
   display: flex;
   justify-content: space-between;
   margin: 1rem 0;
   padding: 0.5rem 0;
   font-size: 0.95rem;
-  color: white;
+  color: #1e3a8a;
   font-weight: 600;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .farmer-instructions {
   margin: 1rem 0 1.2rem 0;
   font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(30, 58, 138, 0.9);
 }
-
 .farmer-instructions h4 {
   margin: 0 0 0.5rem 0;
   color: #10b981;
   font-size: 1rem;
 }
-
 .farmer-instructions ol {
-  margin: 0.3rem 0 0 0;
+  margin: 0.3rem 0 0 1.2rem;
   padding-left: 1.2rem;
 }
-
 .farmer-instructions li {
   margin-bottom: 0.3rem;
   line-height: 1.4;
 }
-
 .order-actions {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
 }
-
 .btn-success {
   background: linear-gradient(135deg, #16a34a, #15803d);
   color: white;
@@ -3016,70 +2889,59 @@ body {
   cursor: pointer;
   font-size: 0.9rem;
 }
-
 .btn-success:hover {
   background: #145f2f;
 }
-
 /* Sales History - Minimal */
 .sales-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.2rem;
 }
-
 .sale-card {
   padding: 1.2rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .sale-card:last-child {
   border-bottom: none;
 }
-
 .sale-header {
   display: flex;
   gap: 1rem;
   margin-bottom: 0.8rem;
   align-items: flex-start;
 }
-
 .sale-product-image {
   width: 60px;
   height: 60px;
   border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(30, 58, 138, 0.5);
   font-size: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .sale-details h3 {
   margin: 0 0 0.2rem 0;
   font-size: 1.1rem;
-  color: white;
+  color: #1e3a8a;
 }
-
 .sale-details p {
   margin: 0;
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(30, 58, 138, 0.8);
 }
-
 .sale-details p.farmer {
   color: #a8f7c5;
 }
-
 .sale-details p.category {
   color: #a0d8f1;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
 }
-
 .sale-stats {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -3087,107 +2949,94 @@ body {
   margin: 0.8rem 0;
   text-align: center;
 }
-
 .stat .label {
   display: block;
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(30, 58, 138, 0.7);
   margin-bottom: 0.1rem;
 }
-
 .stat .value {
   font-weight: 700;
   color: #10b981;
   font-size: 1rem;
 }
-
 .sale-meta {
   display: flex;
   justify-content: space-between;
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(30, 58, 138, 0.6);
   padding-top: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(30, 58, 138, 0.2);
   margin-top: 0.8rem;
 }
-
-
-
 
 /* MESSAGING LAYOUT */
 .messaging-section {
   width: 100%;
   height:85vh;
   position:relative;
-  background: rgba(30, 41, 59, 1);
+  background: rgba(255, 255, 255, 1);
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
-  color: #f1f5f9;
+  color: #1e3a8a;
   padding: 0px;
 }
-
 .messaging-container {
+  position:fixed;
   display: flex;
   width: 100%;
   height: 100%;
-  background: #1e293b;
+  background: #ffffff;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   margin-top: 60px;
 }
-
 /* LEFT SIDEBAR */
 .conversation-list {
   width: 100%;
-  background: #273349;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: #f0f4ff;
+  border-right: 1px solid rgba(30, 58, 138, 0.2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: #e2e8f0;
+  color: #1e3a8a;
 }
-
 .conversation-header {
   padding: 12px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(30, 58, 138, 0.1);
   flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-
 .conversation-header h3 {
   margin: 0;
   font-size: 1rem;
   font-weight: 400;
-  color: #f1f5f9;
+  color: #1e3a8a;
 }
-
 .search-box {
   width: 65%;
   padding: 12px 8px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(51, 65, 85, 0.7);
-  color: #e2e8f0;
+  border: 1px solid rgba(30, 58, 138, 0.2);
+  background: rgba(240, 249, 255, 0.8);
+  color: #1e3a8a;
   font-size: 0.9rem;
   box-sizing: border-box;
   transition: all 0.2s ease;
 }
-
 .search-box::placeholder {
   color: #94a3b8;
 }
-
 .search-box:focus {
   outline: none;
   border-color: rgba(34, 197, 94, 0.5);
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
 }
-
 .conversation-items {
   list-style: none;
   margin: 0;
@@ -3196,63 +3045,54 @@ body {
   flex: 1;
   scrollbar-width: thin;
 }
-
 .conversation {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(30, 58, 138, 0.1);
   transition: all 0.2s ease;
   position: relative;
 }
-
 .conversation:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(30, 58, 138, 0.05);
 }
-
 .conversation.active {
   background: rgba(34, 197, 94, 0.2);
   border-left: 3px solid #22c55e;
 }
-
 .avatar {
   width: 44px;
   height: 44px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .info {
   flex: 1;
   min-width: 0;
   overflow: hidden;
 }
-
 .info .top {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 3px;
 }
-
 .info .top strong {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #f1f5f9;
+  color: #1e3a8a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .info .top small {
   font-size: 0.75rem;
   color: #94a3b8;
   flex-shrink: 0;
 }
-
 .last {
   font-size: 0.8rem;
   color: #94a3b8;
@@ -3261,7 +3101,6 @@ body {
   text-overflow: ellipsis;
   margin-top: 2px;
 }
-
 .badge {
   background: #22c55e;
   color: white;
@@ -3270,20 +3109,71 @@ body {
   border-radius: 12px;
   font-weight: 600;
   flex-shrink: 0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
-
-/* Chat Area */
+/* ===== CHAT AREA LAYOUT (FIXED FOR SCROLLING) ===== */
 .chat-area {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #0f172a;
-  min-height: 0; /* Crucial for nested flex scrolling */
+  background: #f0f7ff;
+  min-height: 0; /* Critical: allows flex children to shrink */
   position: relative;
-  color: #f1f5f9;
+  color: #1e3a8a;
 }
 
+/* Header stays at top */
+.chat-header {
+  flex-shrink: 0;
+  padding: 14px 24px;
+  background: rgba(240, 249, 255, 0.95);
+  border-bottom: 1px solid rgba(30, 58, 138, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+}
+
+/* Optional: Reply indicator (non-scrolling) */
+.reply-indicator {
+  flex-shrink: 0;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 12px 24px;
+  margin: 0 24px 8px;
+  font-size: 0.85rem;
+  max-height: 80px;
+  overflow: hidden;
+}
+
+/* ✅ ONLY SCROLLABLE REGION */
+.messages {
+  flex: 1; /* Fills all remaining space */
+  overflow-y: auto; /* Enables scrolling */
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-behavior: smooth;
+  background: #f0f7ff;
+  /* NO max-height, NO position: relative unless needed */
+}
+
+/* Input row — keep position: fixed, but don't let it affect messages */
+.input-row {
+  display: flex;
+  width: 71.9%;
+  align-items: center;
+  padding: 14px 24px;
+  background: rgba(240, 249, 255, 0.9);
+  border-top: 1px solid rgba(30, 58, 138, 0.1);
+  position: fixed;
+  bottom: 0;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+}
 /* Middle: scrollable messages */
 .messages-wrapper {
   flex: 1; /* This makes it grow to fill available space */
@@ -3291,7 +3181,6 @@ body {
   display: flex;
   flex-direction: column;
 }
-
 /* MESSAGES AREA - ONLY SCROLLABLE PART */
 .messages {
   flex: 1; /* This makes the messages area scrollable */
@@ -3302,15 +3191,12 @@ body {
   gap: 12px;
   scroll-behavior: smooth;
 }
-
-
-
 /* Header — sticks to top */
 .chat-header {
   flex-shrink: 0;
   padding: 14px 20px;
-  background: rgba(51, 65, 85, 0.95);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(240, 249, 255, 0.95);
+  border-bottom: 1px solid rgba(30, 58, 138, 0.1);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -3319,7 +3205,6 @@ body {
   position: sticky;
   top: 0;
 }
-
 /* Reply indicator above input */
 .reply-indicator {
   flex-shrink: 0;
@@ -3332,13 +3217,12 @@ body {
   max-height: 80px;
   overflow: hidden;
 }
-
 /* MESSAGES AREA - ONLY SCROLLABLE PART */
 .messages {
   flex: 1;
   overflow-y: auto;
   padding: 20px 24px;
-  background: #0f172a;
+  background: #f0f7ff;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -3347,19 +3231,16 @@ body {
   position: relative;
   z-index: 5;
 }
-
 /* DATE HEADER STYLING — CLEAN, MODERN, CENTERED */
 .date-group {
   margin-bottom: 20px;
 }
-
 .date-header {
   text-align: center;
   margin: 18px 0 12px;
   position: relative;
   width: 100%;
 }
-
 .date-header::before {
   content: '';
   position: absolute;
@@ -3367,12 +3248,11 @@ body {
   left: 0;
   width: 100%;
   height: 1px;
-  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1), transparent);
+  background: linear-gradient(to right, transparent, rgba(30, 58, 138, 0.2), transparent);
   z-index: 1;
 }
-
 .date-header span {
-  background-color: #1e293b;
+  background-color: #ffffff;
   padding: 8px 20px;
   border-radius: 16px;
   font-size: 0.85rem;
@@ -3380,11 +3260,10 @@ body {
   font-weight: 500;
   position: relative;
   z-index: 2;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(30, 58, 138, 0.1);
 }
-
 /* MESSAGE GROUPS */
 .message-group {
   display: flex;
@@ -3392,15 +3271,12 @@ body {
   align-items: flex-start;
   position: relative;
 }
-
 .sent-group {
   justify-content: flex-end;
 }
-
 .received-group {
   justify-content: flex-start;
 }
-
 .avatar-container {
   margin-right: 10px;
   flex-shrink: 0;
@@ -3408,29 +3284,24 @@ body {
   align-items: flex-start;
   margin-top: 4px;
 }
-
 .messages-bubble {
   display: flex;
   flex-direction: column;
   max-width: 70%;
   gap: 4px;
 }
-
 .grouped-message {
   margin-bottom: 2px;
   position: relative;
 }
-
 .grouped-message:last-child {
   margin-bottom: 0;
 }
-
 .grouped-message .bubble {
   max-width: 100%;
   margin-bottom: 0;
   position: relative;
 }
-
 .message.sent .bubble {
   background: #22c55e;
   color: #fff;
@@ -3441,18 +3312,16 @@ body {
   line-height: 1.4;
   word-wrap: break-word;
 }
-
 .message.received .bubble {
-  background: #334155;
-  color: #f1f5f9;
+  background: #e2e8f0;
+  color: #1e3a8a;
   border-radius: 16px 16px 16px 4px;
   padding: 20px 16px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   font-size: 0.95rem;
   line-height: 1.4;
   word-wrap: break-word;
 }
-
 /* Timestamp */
 .timestamp {
   display: block;
@@ -3462,38 +3331,32 @@ body {
   margin-top: 6px;
   font-weight: 500;
 }
-
 .message.sent .timestamp {
   color: rgba(255, 255, 255, 0.7);
 }
-
 .message.received .timestamp {
   color: #94a3b8;
 }
-
 /* Message Content */
 .message-content {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-
 .attachment-preview {
   margin-top: 8px;
   max-width: 100%;
 }
-
 .attached-image {
   max-width: 180px;
   max-height: 180px;
   border-radius: 12px;
   object-fit: cover;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(30, 58, 138, 0.1);
 }
-
 .file-attachment {
-  background: #1e293b;
+  background: #ffffff;
   color: #94a3b8;
   padding: 10px 12px;
   border-radius: 12px;
@@ -3501,20 +3364,18 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(30, 58, 138, 0.1);
 }
-
 /* Avatar for received messages */
 .message.received img.avatar {
   width: 34px;
   height: 34px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(30, 58, 138, 0.1);
   margin-right: 8px;
   margin-top: 4px;
 }
-
 /* Message Options (Three Dots) */
 .message-options {
   position: absolute;
@@ -3537,25 +3398,22 @@ body {
   justify-content: center;
   border-radius: 50%;
 }
-
 .message:hover .message-options {
   opacity: 1;
 }
-
 .message-options:hover {
   opacity: 1 !important;
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #f1f5f9;
+  background-color: rgba(30, 58, 138, 0.1);
+  color: #1e3a8a;
 }
-
 .options-menu {
   position: absolute;
   top: 28px;
   right: 0;
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #ffffff;
+  border: 1px solid rgba(30, 58, 138, 0.1);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   min-width: 140px;
   overflow: hidden;
@@ -3565,7 +3423,6 @@ body {
   transition: all 0.2s ease;
   backdrop-filter: blur(10px);
 }
-
 /* Show menu when message option is clicked */
 .message-options.active + .options-menu,
 .options-menu.show {
@@ -3574,7 +3431,6 @@ body {
   transform: translateY(0);
   display: block !important;
 }
-
 .options-menu button {
   display: block;
   width: 100%;
@@ -3584,27 +3440,23 @@ body {
   text-align: left;
   cursor: pointer;
   font-size: 0.9rem;
-  color: #e2e8f0;
+  color: #1e3a8a;
   transition: background 0.2s;
   border-radius: 0;
   font-weight: 500;
 }
-
 .options-menu button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f1f5f9;
+  background: rgba(30, 58, 138, 0.08);
+  color: #1e3a8a;
 }
-
 .options-menu button:first-child {
   border-top-left-radius: 12px;
   border-top-right-radius: 12px;
 }
-
 .options-menu button:last-child {
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
 }
-
 /* Ensure bubble has relative positioning */
 .bubble {
   position: relative; /* ← ADD THIS */
@@ -3619,8 +3471,6 @@ body {
   color: #fff;
   box-shadow: 0 2px 6px rgba(34, 197, 94, 0.2);
 }
-
-
 /* REPLY INDICATOR - STANDS OUT ON TOP */
 .reply-indicator {
   position: relative; /* Ensure z-index works */
@@ -3632,7 +3482,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 50px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Stronger shadow for depth */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* Stronger shadow for depth */
   margin: 0 24px 8px 24px;
   max-width: calc(100% - 48px);
   max-height: 50px;
@@ -3641,12 +3491,10 @@ body {
   /* Optional: Add a subtle animation for attention */
   animation: fadeIn 0.3s ease-in;
 }
-
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
 /* Header inside reply indicator */
 .reply-header {
   display: flex;
@@ -3656,12 +3504,10 @@ body {
   color: #059669;
   font-weight: 500;
 }
-
 .reply-sender {
   font-style: italic;
   font-weight: 600;
 }
-
 .cancel-reply {
   background: none;
   border: none;
@@ -3677,59 +3523,52 @@ body {
   align-items: center;
   justify-content: center;
 }
-
 .cancel-reply:hover {
-  color: #f1f5f9;
-  background-color: rgba(255, 255, 255, 0.08);
+  color: #1e3a8a;
+  background-color: rgba(30, 58, 138, 0.08);
 }
-
 /* Content inside reply indicator */
 .reply-content {
   font-size: 0.9rem;
-  color: #e2e8f0;
+  color: #1e3a8a;
   padding: 4px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid rgba(30, 58, 138, 0.1);
   margin-top: 2px;
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .input-row {
   display: flex;
   width: 71.9%;
   align-items: center;
   padding: 14px 24px;
-  background: rgba(51, 65, 85, 0.7);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(240, 249, 255, 0.9);
+  border-top: 1px solid rgba(30, 58, 138, 0.1);
   position: fixed; /* Changed from 'fixed' */
   bottom: 0;
   z-index: 10;
   flex-shrink: 0;
   backdrop-filter: blur(10px);
 }
-
 .input-row input {
   flex: 1;
   padding: 25px 20px;
   border-radius: 12px;
   border: none;
   outline: none;
-  background: #0035504b;
-  color: #f9f9feff;
+  background: #ffffff;
+  color: #1e3a8a;
   font-size: 0.95rem;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.62);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
-
 .input-row input::placeholder {
   color: #94a3b8;
 }
-
 .input-row input:focus {
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
 }
-
 .input-row button {
   background: #22c55e;
   color: white;
@@ -3743,19 +3582,16 @@ body {
   transition: background 0.2s, transform 0.1s;
   box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
 }
-
 .input-row button:hover {
   background: #16a34a;
   transform: translateY(-1px);
 }
-
 .input-row button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
-  background: #4a5568;
+  background: #cbd5e1;
 }
-
 /* Placeholder */
 .placeholder {
   display: flex;
@@ -3766,7 +3602,6 @@ body {
   font-style: italic;
   font-size: 2rem;
 }
-
 /* Emoji Picker */
 .emoji-picker {
   position: fixed;
@@ -3774,11 +3609,11 @@ body {
   left: 16px;
   right: 16px;
   max-height: 200px;
-  background: #1e293b;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #ffffff;
+  border: 1px solid rgba(30, 58, 138, 0.1);
   border-radius: 16px;
   padding: 14px 8px 8px; /* Extra space for close button */
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 16px;
@@ -3786,7 +3621,6 @@ body {
   z-index: 1000;
   backdrop-filter: blur(10px);
 }
-
 .emoji-option {
   text-align: center;
   cursor: pointer;
@@ -3795,11 +3629,9 @@ body {
   border-radius: 12px;
   transition: background 0.2s;
 }
-
 .emoji-option:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(30, 58, 138, 0.08);
 }
-
 /* File Picker Button */
 .input-tools button {
   background: none;
@@ -3811,58 +3643,47 @@ body {
   border-radius: 12px;
   transition: background 0.2s;
 }
-
 .input-tools button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f1f5f9;
+  background: rgba(30, 58, 138, 0.08);
+  color: #1e3a8a;
 }
-
 /* Scrollbar Styling */
 .messages::-webkit-scrollbar,
 .conversation-items::-webkit-scrollbar {
   width: 6px;
 }
-
 .messages::-webkit-scrollbar-thumb,
 .conversation-items::-webkit-scrollbar-thumb {
-  background: #4a5568;
+  background: #cbd5e1;
   border-radius: 10px;
 }
-
 .messages::-webkit-scrollbar-track,
 .conversation-items::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: #f0f7ff;
 }
-
 .messages::-webkit-scrollbar-thumb:hover,
 .conversation-items::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #94a3b8;
 }
-
 /* General Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: #f0f7ff;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #4a5568;
+  background: #cbd5e1;
   border-radius: 10px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #94a3b8;
 }
-
 /* Message alignment fixes */
 .message.sent {
   align-self: flex-end !important;
   text-align: right;
 }
-
 .message.received {
   align-self: flex-start !important;
   text-align: left;
@@ -3874,15 +3695,12 @@ body {
   align-items: flex-start;
   position: relative;
 }
-
 .sent-group {
   justify-content: flex-end;
 }
-
 .received-group {
   justify-content: flex-start;
 }
-
 .avatar-container {
   margin-right: 12px;
   flex-shrink: 0;
@@ -3890,38 +3708,32 @@ body {
   flex-direction: column;
   align-items: center;
 }
-
 .avatar-container .avatar {
   width: 34px;
   height: 34px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(30, 58, 138, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-
 .messages-bubble {
   display: flex;
   flex-direction: column;
   max-width: 70%;
   gap: 2px;
 }
-
 .grouped-message {
   margin-bottom: 2px;
   position: relative;
 }
-
 .grouped-message:last-child {
   margin-bottom: 0;
 }
-
 .bubble {
   position: relative;
   max-width: 100%;
   margin-bottom: 0;
 }
-
 .message.sent .bubble {
   background: #22c55e;
   color: #fff;
@@ -3930,16 +3742,14 @@ body {
   font-size: 0.95rem;
   line-height: 1.4;
 }
-
 .message.received .bubble {
-  background: #334155;
-  color: #f1f5f9;
+  background: #e2e8f0;
+  color: #1e3a8a;
   border-radius: 16px 16px 16px 4px;
   padding: 12px 16px;
   font-size: 0.95rem;
   line-height: 1.4;
 }
-
 .timestamp {
   display: block;
   text-align: right;
@@ -3954,16 +3764,13 @@ body {
   gap: 6px;
   margin-top: 4px;
 }
-
 .read-status {
   font-size: 12px;
   line-height: 1;
 }
-
 .gray-ticks {
   color: #94a3b8;
 }
-
 .blue-ticks {
   color: #22c55e; /* or #34b7f1 for WhatsApp-style blue */
   font-weight: bold;
@@ -3972,7 +3779,6 @@ body {
   color: #94a3b8;
   text-align: left;
 }
-
 /* Confirmation Overlay & Modal */
 .confirm-overlay {
   position: fixed;
@@ -3986,7 +3792,6 @@ body {
   align-items: center;
   z-index: 100;
 }
-
 .confirm-box {
   background: #fff;
   padding: 10px;
@@ -3996,14 +3801,12 @@ body {
   width: 90%;
   color: #333;
 }
-
 .confirm-box .actions {
   margin-top: 15px;
   display: flex;
   justify-content: center;
   gap: 10px;
 }
-
 .status-message {
   position: fixed;
   bottom: 20px; right: 20px;
@@ -4012,10 +3815,8 @@ body {
   font-weight: bold;
   z-index: 20;
 }
-
 .status-message.success { background: #d4edda; color: #155724; }
 .status-message.error { background: #f8d7da; color: #721c24; }
-
 .confirm-modal {
   background: white;
   color: #333;
@@ -4026,19 +3827,16 @@ body {
   max-width: 400px;
   width: 90%;
 }
-
 .confirm-modal p {
   margin-bottom: 40px;
   font-size: 1rem;
   line-height: 0.5;
 }
-
 .confirm-buttons {
   display: flex;
   justify-content: center;
   gap: 10px;
 }
-
 .btn-confirm {
   background: #1bf217c6;
   color: white;
@@ -4048,7 +3846,6 @@ body {
   cursor: pointer;
   font-weight: 500;
 }
-
 .btn-cancel {
   background: #e71a1aff;
   color: white;
@@ -4058,45 +3855,36 @@ body {
   cursor: pointer;
   font-weight: 500;
 }
-
 .btn-confirm:hover {
   background: #2ce40bff;
 }
-
 .btn-cancel:hover {
   background: #fd0808ff;
 }
-
 /* Responsive Adjustments */
 @media (max-width: 768px) {
   .hamburger-icon {
     display: block; /* Show hamburger on mobile */
   }
-
   .sidebar {
     top: 0;
     height: 100vh;
     z-index: 1001; /* Higher than main content */
   }
-
   .sidebar.sidebar-hidden {
     transform: translateX(-100%);
   }
-
   .main-wrapper {
     margin-left: 0;
   }
-
   .dashboard-header {
     position: fixed; /* Ensure sticky behavior on mobile */
     margin-left: 0;
   }
-
   .main-content {
     padding: 0.5rem; /* Reduced padding */
     padding-top: 100px; /* Adjusted for sticky header */
   }
-
   .stats-grid,
   .quick-actions,
   .product-grid,
@@ -4104,270 +3892,218 @@ body {
   .feedback-cards-grid {
     grid-template-columns: 1fr; /* Single column on small screens */
   }
-
   .form-row {
     grid-template-columns: 1fr; /* Single column form */
   }
-
   .order-card {
     padding: 1rem; /* Reduced padding */
   }
-
   .order-item {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
-
   .item-image {
     width: 50px;
     height: 50px;
   }
-
   .order-actions {
     flex-direction: column;
     align-items: stretch;
   }
-
   .btn-primary,
   .btn-secondary,
   .btn-success {
     width: 100%; /* Full width buttons */
   }
-
   /* Messaging Section Adjustments */
   .messaging-container {
     flex-direction: column; /* Stack sidebar and chat vertically */
     max-height: 100%; /* Adjust height calculation */
   }
-
   .conversation-list {
     width: 100%; /* Full width when stacked */
     max-width: none;
     height: auto; /* Auto height when stacked */
     border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Separator line */
+    border-bottom: 1px solid rgba(30, 58, 138, 0.1); /* Separator line */
   }
-
   .conversation-items {
     max-height: 200px; /* Limit height on smaller screens when stacked */
   }
-
   .chat-area {
     height: 100%; /* Take full height when stacked */
   }
-
   .input-row {
     padding: 8px 12px; /* Reduce input padding */
   }
-
   .input-row input {
     padding: 8px; /* Smaller input padding */
   }
-
   .input-row button {
     padding: 8px 12px; /* Smaller button padding */
   }
 }
-
 @media (max-width: 480px) {
   .greeting h2 {
     font-size: 1.5rem; /* Smaller title */
   }
-
   .greeting p {
     font-size: 0.9rem; /* Smaller subtitle */
   }
-
   .user-profile {
     width: 50px; /* Smaller profile pic */
     height: 50px;
   }
-
   .main-content {
     padding: 1rem; /* Further reduced padding */
     padding-top: 95px; /* Adjusted for smaller header */
   }
-
   .stat-card {
     padding: 1.5rem; /* Smaller cards */
   }
-
   .stat-icon {
     font-size: 2rem; /* Smaller icons */
   }
-
   .stat-number {
     font-size: 1.5rem; /* Smaller numbers */
   }
-
   .content-section {
     padding: 1.5rem; /* Smaller sections */
   }
-
   .action-btn {
     padding: 0.75rem 1rem; /* Smaller buttons */
   }
-
   .activity-item {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
-
   .activity-icon {
     width: auto; /* Allow icon to fit */
   }
-
   .product-card {
     flex-direction: column; /* Stack image and info */
   }
-
   .product-image-container {
     height: 150px; /* Smaller image */
   }
-
   .product-actions {
     flex-direction: column; /* Stack action buttons */
     width: 100%;
   }
-
   .btn-secondary,
   .btn-danger {
     width: 100%; /* Full width action buttons */
   }
-
   .feedback-card {
     padding: 1rem; /* Smaller cards */
   }
-
   .card-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
-
   .order-summary {
     flex-direction: column;
     gap: 0.5rem;
     align-items: flex-start;
   }
-
   .sale-card {
     padding: 1rem; /* Smaller cards */
   }
-
   .sale-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
-
   .sale-product-image {
     width: 60px; /* Smaller image */
     height: 60px;
   }
-
   .sale-stats {
     grid-template-columns: 1fr; /* Single column stats */
   }
-
   /* Messaging Section Adjustments */
   .messaging-section {
     padding: 5px; /* Reduce section padding */
   }
-
   .conversation-header,
   .chat-header {
     padding: 8px 10px; /* Reduce header padding */
   }
-
   .messages {
     padding: 10px; /* Reduce message padding */
   }
-
   .message {
     max-width: 120%; /* Wider messages on very small screens */
   }
-
   .input-row {
     padding: 6px 10px; /* Further reduce input padding */
   }
-
   .input-row input {
     padding: 8px; /* Smaller input padding */
   }
-
   .input-row button {
     padding: 6px 10px; /* Smaller button padding */
   }
 }
-
 /* Form Improvements (Responsive) */
 .form {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.95);
   padding: 1.5rem; /* Slightly smaller padding */
   border-radius: 15px;
   margin-bottom: 2rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(30, 58, 138, 0.2);
 }
-
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
   margin-bottom: 1.5rem;
 }
-
 .form-group {
   margin-bottom: 1rem;
 }
-
 .form-group label {
   display: block;
-  color: rgba(11, 11, 11, 0.9);
+  color: #1e3a8a;
   margin-bottom: 0.5rem;
   font-weight: 500;
   font-size: 0.95rem;
 }
-
 .form-group input,
 .form-group textarea,
 .form-group select {
   width: 100%;
   padding: 0.75rem 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(30, 58, 138, 0.2);
   border-radius: 12px;
   background: rgba(255, 255, 255, 1);
-  color: rgba(14, 14, 14, 1);
+  color: #1e3a8a;
   font-size: 1rem;
   transition: all 0.3s ease;
 }
-
-.form-group input:focus, 
+.form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
   outline: none;
   border-color: #10b981;
   box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
 }
-
 .form-group textarea {
   resize: vertical;
   min-height: 80px;
 }
-
 .image-preview {
   margin-top: 1rem;
 }
-
 .image-preview img {
   max-width: 200px;
   max-height: 200px;
   border-radius: 12px;
   object-fit: cover;
 }
-
 .image-preview button {
   background: #ef4444;
   color: white;
@@ -4378,7 +4114,6 @@ body {
   font-size: 0.85rem;
   margin-top: 0.5rem;
 }
-
 /* Full-bleed sections: no padding, no radius, no border, no margin */
 .farmer-listings,
 .content-section,
@@ -4392,39 +4127,35 @@ body {
   backdrop-filter: none !important;
   box-shadow: none !important;
 }
-
 /* ===== MOBILE-FIRST MESSAGING LAYOUT ===== */
-
 /* Default: Desktop layout */
 .messaging-container {
   display: flex;
   width: 100%;
   height: 100%;
-  background: #1e293b;
+  background: #ffffff;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   margin-top: 60px;
 }
-
 .conversation-list {
   width: 25%;
-  background: #273349;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: #f0f4ff;
+  border-right: 1px solid rgba(30, 58, 138, 0.1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: #e2e8f0;
+  color: #1e3a8a;
 }
-
 .chat-area {
   width: 85%;
   display: flex;
   flex-direction: column;
-  background: #0f172a;
+  background: #f0f7ff;
   height: 100%;
   position: relative;
-  color: #f1f5f9;
+  color: #1e3a8a;
 }
 /* Mobile view (max-width: 768px) */
 @media (max-width: 768px) {
@@ -4438,14 +4169,12 @@ body {
     margin: 0;
     padding: 0;
   }
-
   .messaging-container {
     height: 100%;
     border-radius: 0;
     margin-top: 0;
     flex-direction: column;
   }
-
   /* Conversation list */
   .conversation-list {
     width: 100% !important;
@@ -4456,7 +4185,6 @@ body {
     z-index: 20;
     transition: transform 0.3s ease;
   }
-
   /* Hide when active */
   .conversation-list.hidden,
   .conversation-list.mobile-hidden {
@@ -4464,7 +4192,6 @@ body {
     pointer-events: none;
     display: none !important;
   }
-
   /* Chat area */
   .chat-area {
     width: 100% !important;
@@ -4472,35 +4199,30 @@ body {
     position: relative;
     z-index: 10;
   }
-
   .chat-header {
     position: sticky;
     top: 0;
     z-index: 30;
-    background: rgba(30, 41, 59, 0.95);
+    background: rgba(255, 255, 255, 0.95);
   }
-
   .back-button {
     background: none;
     border: none;
-    color: white;
+    color: #1e3a8a;
     font-size: 1.5rem;
     cursor: pointer;
     padding-right: 12px;
   }
-
   .messages {
     max-height: calc(100vh - 270px); /* Adjusted for 100px header + input/chat header */
     padding: 12px;
   }
-
   .input-row {
     padding: 30px;
     position: fixed;
     bottom: 0;
-    background: rgba(51, 65, 85, 0);
+    background: rgba(240, 249, 255, 0.9);
   }
-
   .input-row input,
   .input-row button {
     font-size: 1.2rem;
@@ -4514,7 +4236,6 @@ body {
     margin-left: 0 !important;
     width: 100%;
   }
-
   /* Make main content fill available space below header */
   .main-content {
     position: fixed;
@@ -4525,39 +4246,35 @@ body {
     padding: 2rem;
     padding-top: 1rem; /* Reduced top padding since we're already below header */
     overflow-y: auto;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
-    color: white;
+    color: #1e3a8a;
     box-sizing: border-box;
     z-index: 900;
   }
-
   /* Hide sidebar on mobile by default */
   .sidebar {
     transform: translateX(-100%);
     transition: transform 0.3s ease;
   }
-
   .sidebar:not(.sidebar-hidden) {
     transform: translateX(0);
   }
-
   /* Ensure dashboard header stays sticky */
   .dashboard-header {
     position: fixed;
     top: 0;
     z-index: 1000;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px);
     padding: 1.7rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 4px solid rgba(255, 255, 255, 0.2);
-    color: white;
+    border-bottom: 4px solid rgba(30, 58, 138, 0.2);
+    color: #1e3a8a;
     box-sizing: border-box;
   }
-
   /* Remove any leftover margins/padding from body/html */
   body, html {
     margin: 0;
@@ -4568,4 +4285,108 @@ body {
   }
 }
 
+/* Grouped Sales Layout */
+.sales-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.order-sale-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.order-info h3 {
+  margin: 0;
+  color: #1e3a8a;
+  font-size: 1.25rem;
+}
+
+.order-date {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0.25rem 0;
+}
+
+.customer {
+  font-size: 0.875rem;
+  color: #475569;
+  margin: 0;
+}
+
+.order-total {
+  text-align: right;
+}
+
+.total-label {
+  display: block;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.total-value {
+  font-weight: 700;
+  color: #10b981;
+  font-size: 1.125rem;
+}
+
+.order-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sale-item {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 12px;
+  align-items: flex-start;
+}
+
+.item-image {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.item-details h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  color: #1e3a8a;
+}
+
+.item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.item-total {
+  color: #10b981;
+  font-weight: 600;
+}
 </style>

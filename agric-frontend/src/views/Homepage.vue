@@ -302,25 +302,84 @@ Grow. Connect. Thrive — with FASI Market.      </p>
     <p class="eco-sub">Sustainable practices for a better tomorrow.</p>
   </div>
 </section>
-
-<!-- Compact Contact Section -->
+<!-- Enhanced Contact Section (No Container Box) -->
 <section id="contact" class="section contact-section">
-  <h2 class="section-title">Send Us a Message</h2>
-  <form class="contact-form">
+  <h2 class="contact-title">Get In Touch</h2>
+  <p class="contact-subtitle">We'd love to hear from you. Send us a message!</p>
+  
+  <form class="contact-form" @submit.prevent="sendMessage">
     <div class="form-group">
-      <input type="text" placeholder="Your name" />
-      <input type="email" placeholder="Email address" />
+      <label for="name">
+        <span class="label-icon">👤</span>
+        Your name
+      </label>
+      <input 
+        id="name"
+        v-model="contact.name" 
+        type="text" 
+        placeholder="Enter your full name" 
+        required 
+        class="form-input"
+      />
     </div>
-    <textarea placeholder="Your message"></textarea>
-    <button type="submit">Send</button>
+    
+    <div class="form-group">
+      <label for="email">
+        <span class="label-icon">📧</span>
+        Email address
+      </label>
+      <div class="input-with-icon">
+        <input 
+          id="email"
+          v-model="contact.email" 
+          type="email" 
+          placeholder="your.email@example.com" 
+          required 
+          class="form-input"
+        />
+        <span class="input-icon">🔒</span>
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label for="message">
+        <span class="label-icon">💬</span>
+        Your message
+      </label>
+      <textarea 
+        id="message"
+        v-model="contact.message" 
+        placeholder="Write your message here..." 
+        required 
+        class="form-textarea"
+        rows="6"
+      ></textarea>
+    </div>
+    
+    <button type="submit" class="submit-btn">
+      <span>Send Message</span>
+      <span class="btn-icon">➤</span>
+    </button>
   </form>
+
+  <!-- Status message -->
+  <div v-if="statusMessage.text" :class="['status-message', statusMessage.type]">
+    {{ statusMessage.text }}
+  </div>
 </section>
+
+
+
 
   </div>
     </div>
 </template>
 
 <script setup>
+import { ref, reactive } from 'vue'
+// At the top of your script (or in main.js)
+import axios from 'axios'
+axios.defaults.baseURL = 'http://127.0.0.1:8000'
 import agriculture from '@/assets/agricultural products.jpg';
 import organic from '@/assets/organic.jpg';
 import dairy from '@/assets/dairy-prod.png';
@@ -356,6 +415,54 @@ const scrollToSection = (id) => {
     el.scrollIntoView({ behavior: 'smooth' });
   }
 };
+// 1. Define the contact form data
+const contact = reactive({
+  name: '',
+  email: '',
+  message: ''
+})
+
+// 2. Define the status message ref
+const statusMessage = ref({
+  text: '',
+  type: 'success' // 'success' or 'error'
+})
+
+// 3. ✅ CORRECT showStatus function — no recursion!
+const showStatus = (text, type = 'success') => {
+  // Update the ref — this triggers reactivity
+  statusMessage.value = { text, type }
+
+  // Auto-clear after 3 seconds
+  setTimeout(() => {
+    statusMessage.value = { text: '', type: 'success' }
+  }, 3000)
+}
+
+// 4. Send message handler
+const sendMessage = async () => {
+  // Optional: basic validation
+  if (!contact.name || !contact.email || !contact.message) {
+    showStatus('All fields are required.', 'error')
+    return
+  }
+
+  try {
+    const res = await axios.post('/api/contact', contact)
+
+    // Show success message from backend
+    showStatus(res.data.message || 'Message sent successfully!', 'success')
+
+    // Reset form
+    contact.name = ''
+    contact.email = ''
+    contact.message = ''
+  } catch (err) {
+    // Handle API errors
+    const msg = err.response?.data?.message || 'Failed to send message. Please try again.'
+    showStatus(msg, 'error')
+  }
+}
 </script>
 
 <style scoped>
@@ -874,7 +981,7 @@ body {
 /* === Projects === */
 .projects-section {
   background-color: #f0fdf4;
-  padding: 4rem 1rem;
+  padding: 3rem 0rem;
   text-align: center;
 }
 
@@ -1028,7 +1135,7 @@ body {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.55);
   z-index: 0;
 }
 
@@ -1047,66 +1154,525 @@ body {
 }
 
 .eco-sub {
-  font-size: 1.125rem;
+  font-size: 1.5rem;
   font-weight: 400;
   font-family: 'Dancing Script', cursive;
 }
 
-/* === Contact === */
+
+/* === Enhanced Contact Section (No Container Box) === */
 .contact-section {
-  padding: 3rem 1rem;
-  max-width: 640px;
-  margin: auto;
-  text-align: center;
+  padding: 5rem 2rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+  position: relative;
+  overflow: hidden;
+  text-align: center; /* Center all content */
+}
+
+.contact-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background:  #10b98100;
+}
+
+.contact-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin-bottom: 0.5rem;
+  font-family: 'Dancing Script', cursive;
+}
+
+.contact-subtitle {
+  color: #718096;
+  font-size: 1.1rem;
+  margin-bottom: 2.5rem;
+  font-family: 'Dancing Script', cursive;
 }
 
 .contact-form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  font-family: 'Dancing Script', cursive;
+  gap: 1.8rem;
+  max-width: 600px; /* Keep form readable */
+  margin: 0 auto; /* Center the form */
 }
 
 .form-group {
   display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.6rem;
+  text-align: left; /* Keep labels/inputs left-aligned */
 }
 
-.form-group input {
-  flex: 1 1 240px;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  width: 100%;
-}
-
-.contact-form textarea {
-  padding: 0.65rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  width: 100%;
-  min-height: 100px;
-  resize: vertical;
-}
-
-.contact-form button {
-  align-self: center;
-  background-color: #15803d;
-  color: white;
-  padding: 0.6rem 1.5rem;
+.form-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
   font-weight: 600;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
+  color: #2d3748;
+  font-family: 'Dancing Script', cursive;
 }
 
-.contact-form button:hover {
-  background-color: #166534;
+.label-icon {
+  font-size: 1.2rem;
 }
+
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 1rem 1.2rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-family: 'Poppins', sans-serif;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.9); /* Slight transparency */
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #10b981;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: #a0aec0;
+}
+
+.input-with-icon {
+  position: relative;
+}
+
+.input-icon {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.1rem;
+  color: #10b981;
+  pointer-events: none;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 150px;
+  line-height: 1.6;
+}
+
+.submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  padding: 1.2rem 2.5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Dancing Script', cursive;
+  margin-top: 1rem;
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0);
+  align-self: center; /* Center the button */
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(221, 224, 223, 0.03);
+}
+
+.submit-btn:active {
+  transform: translateY(0);
+}
+
+.btn-icon {
+  font-size: 1.2rem;
+  transition: transform 0.3s ease;
+}
+
+.submit-btn:hover .btn-icon {
+  transform: translateX(5px);
+}
+
+.status-message {
+  margin-top: 1.5rem;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  text-align: center;
+  font-weight: 600;
+  animation: slideIn 0.3s ease;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.status-message.success { 
+  background: #d1fae5; 
+  color: #065f46;
+  border: 2px solid #10b981;
+}
+
+.status-message.error { 
+  background: #fee2e2; 
+  color: #991b1b;
+  border: 2px solid #ef4444;
+}
+
+/* ===== MOBILE MESSAGING FIXES ===== */
+@media (max-width: 768px) {
+  /* Main messaging section - full viewport height */
+  .messaging-section {
+    position: fixed;
+    top: 90px; /* Below dashboard header */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(100vh - 90px); /* Exact height below header */
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Prevent scroll on main section */
+  }
+
+  /* Container - full width and height */
+  .messaging-container {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Conversation list - contained */
+  .conversation-list {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 20;
+    transition: transform 0.3s ease;
+    overflow: hidden;
+  }
+
+  .conversation-list.mobile-hidden {
+    transform: translateX(-100%);
+  }
+
+  .conversation-header {
+    padding: 10px;
+    flex-shrink: 0;
+  }
+
+  .search-box {
+    width: 100%;
+    padding: 8px;
+  }
+
+  .conversation-items {
+    max-height: calc(100vh - 150px); /* Account for header */
+    overflow-y: auto;
+  }
+
+  /* Chat area - full width when active */
+  .chat-area {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Chat header - fixed height */
+  .chat-header {
+    flex-shrink: 0;
+    padding: 10px 12px;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+
+  .chat-header .avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .chat-header h4 {
+    font-size: 0.95rem;
+  }
+
+  .back-button {
+    font-size: 1.3rem;
+    padding: 0;
+    margin-right: 8px;
+  }
+
+  /* Reply indicator - compact */
+  .reply-indicator {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    margin: 0 12px 8px;
+    max-height: 60px;
+    font-size: 0.8rem;
+  }
+
+  .reply-header {
+    gap: 8px;
+  }
+
+  /* Messages wrapper - flexible scroll area */
+  .messages-wrapper {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Critical for flex scroll */
+  }
+
+  /* Messages - scrollable area */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px;
+    max-height: none; /* Remove fixed max-height */
+    height: 100%;
+    scroll-behavior: smooth;
+  }
+
+  /* Date headers - compact */
+  .date-header span {
+    font-size: 0.75rem;
+    padding: 6px 14px;
+  }
+
+  /* Message bubbles - fit width */
+  .messages-bubble {
+    max-width: 85%; /* Slightly wider on mobile */
+  }
+
+  .message.sent .bubble,
+  .message.received .bubble {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    max-width: 100%;
+    word-wrap: break-word;
+  }
+
+  .attached-image {
+    max-width: 150px;
+    max-height: 150px;
+  }
+
+  /* Input row - fixed at bottom */
+  .input-row {
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    padding: 10px;
+    gap: 8px;
+    height: auto;
+    min-height: 60px;
+  }
+
+  .input-row input {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    min-height: 40px;
+  }
+
+  .input-row button {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+
+  .input-tools button {
+    font-size: 1.2rem;
+    padding: 6px;
+  }
+
+  /* Emoji picker - fit screen */
+  .emoji-picker {
+    bottom: 70px;
+    left: 8px;
+    right: 8px;
+    max-height: 180px;
+    grid-template-columns: repeat(6, 1fr);
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .emoji-option {
+    font-size: 18px;
+    padding: 4px;
+  }
+
+  /* Message options menu */
+  .options-menu {
+    right: -10px;
+    min-width: 120px;
+  }
+
+  .options-menu button {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+
+  /* Prevent horizontal scroll */
+  .message-group,
+  .sent-group,
+  .received-group {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  /* Avatar sizing */
+  .avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .avatar-container .avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Conversation items */
+  .conversation {
+    padding: 10px 12px;
+  }
+
+  .conversation .avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .info .top strong {
+    font-size: 0.9rem;
+  }
+
+  .last {
+    font-size: 0.75rem;
+  }
+
+  /* Status badges */
+  .badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .messaging-section {
+    top: 85px; /* Smaller header */
+    height: calc(100vh - 85px);
+  }
+
+  .chat-header {
+    height: 55px;
+    padding: 8px 8px;
+  }
+
+  .chat-header h4 {
+    font-size: 0.9rem;
+  }
+
+  .messages {
+    padding: 8px;
+  }
+
+  .message.sent .bubble,
+  .message.received .bubble {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+
+  .input-row {
+    padding: 8px;
+  }
+
+  .input-row input {
+    padding: 8px 10px;
+    font-size: 0.9rem;
+  }
+
+  .input-row button {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+
+  .messages-bubble {
+    max-width: 90%;
+  }
+
+  .attached-image {
+    max-width: 120px;
+    max-height: 120px;
+  }
+}
+
+/* Ensure no overflow anywhere */
+.messaging-section,
+.messaging-container,
+.conversation-list,
+.chat-area,
+.messages-wrapper,
+.messages {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Only messages area scrolls */
+.messages {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbar but keep functionality */
+.messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+.messages::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
 .scroll-wrapper {
   overflow-x: auto;
   padding-bottom: 1rem;
@@ -1224,37 +1790,7 @@ body {
     background-color: rgba(255, 255, 255, 0.1);
   }
 
-  @media (max-width: 480px) {
-  .contact-section {
-    padding: 1.7rem 0.8rem;
-    max-width: 320px;
-  }
 
-  .contact-form {
-    gap: 0.6rem;
-  }
-
-  .form-group {
-    gap: 0.6rem;
-  }
-
-  .form-group input {
-    flex: 1 1 200px;
-    padding: 0.4rem 0.6rem;
-    font-size: 0.8rem;
-  }
-
-  .contact-form textarea {
-    padding: 0.4rem 0.6rem;
-    font-size: 0.8rem;
-    min-height: 70px;
-  }
-
-  .contact-form button {
-    padding: 0.4rem 1rem;
-    font-size: 0.95rem;
-  }
-}
   /* On very small screens (<480px): hide location */
   @media (max-width: 480px) {
     .top-contact > :nth-child(3) {
@@ -1434,5 +1970,13 @@ body {
     height: auto;
   }
 }
-
+.status-message {
+  padding: 10px 16px;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  color: white;
+  font-weight: 500;
+}
+.status-message.success { background: #10b981; }
+.status-message.error { background: #ef4444; }
 </style>

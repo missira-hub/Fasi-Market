@@ -15,21 +15,40 @@ class MessageController extends Controller
 
     // --- List messages
     public function index($conversationId)
-    {
-        $conversation = Conversation::findOrFail($conversationId);
+{
+    $conversation = Conversation::findOrFail($conversationId);
 
-        if(!$conversation->participants()->where('user_id', auth()->id())->exists()){
-            return response()->json(['message'=>'Not a participant'],403);
-        }
-
-        $messages = Message::with('sender:id,name,avatar')
-            ->where('conversation_id',$conversationId)
-            ->orderBy('created_at','asc')
-            ->get();
-
-        return response()->json($messages);
+    if (!$conversation->participants()->where('user_id', auth()->id())->exists()) {
+        return response()->json(['message' => 'Not a participant'], 403);
     }
 
+    $messages = Message::with('sender:id,name,avatar')
+        ->where('conversation_id', $conversationId)
+        ->orderBy('created_at', 'asc')
+        ->get();
+
+    // ✅ Format messages with full attachment URLs
+    return response()->json($messages->map(function ($msg) {
+        return [
+            'id' => $msg->id,
+            'conversation_id' => $msg->conversation_id,
+            'sender_id' => $msg->sender_id,
+            'sender' => $msg->sender,
+            'message_text' => $msg->message_text,
+            'attachment_url' => $msg->attachment_url
+                ? url('storage/' . $msg->attachment_url)
+                : null,
+            'is_read' => $msg->is_read,
+            'created_at' => $msg->created_at,
+            'updated_at' => $msg->updated_at,
+
+            // ✅ Include reply context (if you're saving reply_to_message_id)
+            'reply_to_message_id' => $msg->reply_to_message_id,
+            'reply_to_sender_name' => $msg->reply_to_sender_name,
+            'reply_to_message_text' => $msg->reply_to_message_text,
+        ];
+    }));
+}
 public function store(Request $request)
 {
     $request->validate([
@@ -100,5 +119,10 @@ public function markAsRead($conversationId)
         ->update(['is_read' => true]);
 
     return response()->json(['message' => 'Messages marked as read']);
+}
+// App\Models\Message.php
+public function replyToMessage()
+{
+    return $this->belongsTo(Message::class, 'reply_to_message_id');
 }
 }

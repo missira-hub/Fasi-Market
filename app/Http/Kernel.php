@@ -23,6 +23,7 @@ class Kernel extends HttpKernel
         \App\Http\Middleware\TrimStrings::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
         \App\Http\Middleware\CorsMiddleware::class,
+        
     ];
 
     /**
@@ -73,6 +74,8 @@ class Kernel extends HttpKernel
         'check.role' => \App\Http\Middleware\RoleMiddleware::class,
         'role' => \App\Http\Middleware\RoleMiddleware::class,
     'admin' => \App\Http\Middleware\AdminMiddleware::class,
+    'isAdmin' => \App\Http\Middleware\IsAdmin::class,
+
 
     ];
 }

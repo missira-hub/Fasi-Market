@@ -30,7 +30,9 @@ class Order extends Model
         return $this->belongsTo(User::class);
     }
 
-    // ❌ REMOVE: redundant and confusing
-    // public function order_items() { ... }
-    // public function customer() { ... } (same as user)
+    // If customers are regular 'users'
+public function customer()
+{
+    return $this->belongsTo(\App\Models\User::class, 'user_id');
+}
 }

@@ -152,7 +152,7 @@ export default {
 
     async approveFeedback(id) {
       try {
-        await axios.post(`/api/admin/feedback/${id}/approve`, null, {
+        await axios.post(`/api/admin/feedbacks/${id}/approve`, null, {
           headers: this.getAuthHeaders(),
         })
         this.setMessage(id, 'Feedback approved successfully.')

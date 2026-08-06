@@ -236,6 +236,7 @@ const switchSection = (newSection) => {
   section.value = newSection
 if (isMobile.value) sidebarHidden.value = true  
 
+
 nextTick(() => {
     document.querySelector('.content-area')?.scrollTo({ top: 0, behavior: 'smooth' })
   })
@@ -478,14 +479,21 @@ top: 85px;
   z-index: 90;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
+/* === Always-visible Hamburger Icon === */
 .hamburger-icon {
-  display: none;
   background: none;
   border: none;
   color: white;
   font-size: 1.5rem;
   cursor: pointer;
   margin-right: 1rem;
+  display: block; /* Always visible */
+  z-index: 1001;
+  /* Optional: Add subtle hover effect */
+  transition: color 0.2s ease;
+}
+.hamburger-icon:hover {
+  color: #a5d6a7;
 }
 .greeting h2 {
   margin: 0;
@@ -866,7 +874,11 @@ td {
   box-shadow: 0 6px 18px rgba(46, 125, 50, 0.06);
   border: 1px solid #e8f5e8;
 }
-
+@media (max-width: 768px) {
+  .sidebar {
+    max-width: 100vw; /* Never wider than screen */
+  }
+}
 /* === Responsive === */
 @media (max-width: 768px) {
   .hamburger-icon { display: block; }
@@ -878,5 +890,20 @@ td {
   .chart-wrapper { height: 200px; }
   .table-container { font-size: 0.85rem; }
   th, td { padding: 0.75rem 0.5rem; }
+}
+
+/* Add to your <style> */
+.content-area {
+  /* Prevent iOS zoom on scroll */
+  overscroll-behavior: contain;
+  /* Maintain smooth scrolling on desktop */
+  scroll-behavior: smooth;
+}
+
+/* Override smooth scroll on mobile */
+@media (max-width: 768px) {
+  .content-area {
+    scroll-behavior: auto; /* Disable smooth scroll on mobile */
+  }
 }
 </style>

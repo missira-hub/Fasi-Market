@@ -3,80 +3,69 @@
 namespace App\Http\Controllers\Farmer;
 
 use App\Http\Controllers\Controller;
-use App\Models\OrderItem;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use App\Models\Order;
 
 class SalesController extends Controller
 {
-    /**
-     * Display the farmer's sales history with full product and farmer details.
-     * Only includes orders with status = 'paid'
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function salesHistory(Request $request)
     {
-        $user = Auth::user();
+        $user = $request->user();
 
-        // Ensure the user is a farmer
         if (!$user || $user->role !== 'farmer') {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        // Get order items where:
-        // - Product belongs to this farmer
-        // - Order status is 'paid'
-        $sales = OrderItem::with([
-                'product:id,user_id,name,description,price,quantity,category_id,unit_id,image', 
-                'product.user:id,name', // Farmer info
-                'product.category:id,name', // Category
-                'product.unit:id,name,abbreviation', // Unit
-                'order:id,user_id,total_price,status,created_at'
-            ])
-            ->whereHas('product', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
-            ->whereHas('order', function ($query) {
-                $query->where('status', 'paid'); // Only paid orders
-            })
-            ->select('id', 'order_id', 'product_id', 'quantity', 'price', 'created_at')
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'order_id' => $item->order->id,
-                    'quantity' => $item->quantity,
-                    'unit_price' => round($item->price, 2),
-                    'total_price' => round($item->quantity * $item->price, 2),
-                    'created_at' => $item->created_at,
+        try {
+            // Fetch orders that contain the farmer's products and are paid
+            $orders = Order::with([
+                    'items.product:id,name,image,unit_id,user_id',
+                    'items.product.unit:id,name,abbreviation',
+                    'user:id,name,phone' // customer info
+                ])
+                ->whereHas('items.product', function ($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                })
+                ->where('status', 'paid')
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($order) use ($user) {
+                    // Compute total for this order (only farmer's items)
+                    $farmerItemsTotal = 0;
+                    $farmerItems = $order->items->filter(function ($item) use ($user) {
+                        return $item->product && $item->product->user_id === $user->id;
+                    })->map(function ($item) use (&$farmerItemsTotal) {
+                        $subtotal = $item->quantity * $item->price;
+                        $farmerItemsTotal += $subtotal;
 
-                    // Full Product Data
-                    'product' => [
-                        'id' => $item->product->id,
-                        'name' => $item->product->name,
-                        'description' => $item->product->description,
-                        'price' => $item->product->price,
-                        'image' => $item->product->image,
-                        'category' => $item->product->category ? [
-                            'id' => $item->product->category->id,
-                            'name' => $item->product->category->name
-                        ] : null,
-                        'unit' => $item->product->unit ? [
-                            'id' => $item->product->unit->id,
-                            'name' => $item->product->unit->name,
-                            'abbreviation' => $item->product->unit->abbreviation
-                        ] : null,
-                        'user' => $item->product->user ? [
-                            'id' => $item->product->user->id,
-                            'name' => $item->product->user->name
-                        ] : null
-                    ]
-                ];
-            });
+                        return [
+                            'id' => $item->id,
+                            'product_name' => $item->product->name ?? 'Deleted Product',
+                            'image' => $item->product->image ?? null,
+                            'unit' => $item->product->unit?->abbreviation ?? null,
+                            'quantity' => $item->quantity,
+                            'unit_price' => (float) $item->price,
+                            'total_price' => (float) $subtotal,
+                        ];
+                    });
 
-        return response()->json($sales);
+                    return [
+                        'order_id' => $order->id,
+                        'order_date' => $order->created_at,
+                        'customer' => [
+                            'name' => $order->user?->name ?? 'Anonymous',
+                            'phone' => $order->customer_phone ?? $order->user?->phone ?? null,
+                        ],
+                        'items' => $farmerItems,
+                        'order_total' => (float) $order->total_price, // full order total
+                        'farmer_total' => (float) $farmerItemsTotal, // only farmer's share
+                    ];
+                });
+
+            return response()->json($orders);
+        } catch (\Exception $e) {
+            \Log::error('Sales history grouped error: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to load sales'], 500);
+        }
     }
 }

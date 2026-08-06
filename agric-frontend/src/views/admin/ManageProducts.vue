@@ -3,14 +3,15 @@
     <h2 class="title">📦 Manage Products</h2>
 
     <!-- General message -->
-    <div v-if="messages['_general']" class="inline-message general">
-      {{ messages['_general'] }}
+    <div v-if="messages._general" class="inline-message general">
+      {{ messages._general }}
     </div>
 
     <!-- Product Cards -->
     <div v-if="products.length" class="product-cards">
       <div v-for="product in products" :key="product.id" class="product-card">
-        <!-- Product Header -->
+
+        <!-- Header -->
         <div class="card-header">
           <div class="image-wrapper">
             <img
@@ -21,72 +22,105 @@
             />
             <div v-else class="placeholder-image">🖼️ No Image</div>
           </div>
+
           <div class="info">
             <h3>{{ product.name }}</h3>
             <p class="price">₺{{ formatPrice(product.price) }}</p>
-            <p class="stock">Stock: {{ product.quantity }}</p>
+            <p class="stock">Stock: {{ product.stock }}</p>
           </div>
         </div>
 
         <!-- Farmer Info -->
         <div class="farmer-info">
-          <strong>Farmer:</strong> {{ product.user?.name || 'Unknown' }}
+          <strong>Farmer</strong>
+          {{ product.user?.name || 'Unknown' }}
           <small>{{ product.user?.email || 'No email' }}</small>
         </div>
 
-        <!-- Footer -->
+        <!-- Actions -->
         <div class="card-footer">
-          <button @click="openEditModal(product)" class="btn-edit">✏️ Edit</button>
+          <button class="btn-edit" @click="openEditModal(product)">✏️ Edit</button>
           <button
             v-if="deleteConfirmId !== product.id"
-            @click="showDeleteConfirm(product.id)"
             class="btn-remove"
+            @click="showDeleteConfirm(product.id)"
           >
             ❌ Remove
           </button>
         </div>
 
-        <!-- Inline Delete Confirmation -->
+        <!-- Delete confirmation -->
         <div v-if="deleteConfirmId === product.id" class="delete-confirm">
-          <span>Are you sure you want to remove this product?</span>
+          Are you sure?
           <div class="confirm-buttons">
-            <button @click="removeProduct(product.id)" class="btn-yes">Yes</button>
-            <button @click="cancelDelete()" class="btn-no">No</button>
+            <button class="btn-yes" @click="removeProduct(product.id)">Yes</button>
+            <button class="btn-no" @click="cancelDelete">No</button>
           </div>
         </div>
 
-        <!-- Inline message per product -->
+        <!-- Inline message -->
         <div v-if="messages[product.id]" class="inline-message">
           {{ messages[product.id] }}
         </div>
       </div>
     </div>
 
-    <!-- No Products -->
     <p v-else class="no-products">No products found.</p>
 
     <!-- Pagination -->
     <div v-if="pagination.total > pagination.per_page" class="pagination">
-      <button :disabled="pagination.current_page === 1" @click="changePage(pagination.current_page - 1)">← Prev</button>
+      <button :disabled="pagination.current_page === 1"
+              @click="changePage(pagination.current_page - 1)">
+        ← Prev
+      </button>
+
       <span>Page {{ pagination.current_page }} / {{ pagination.last_page }}</span>
-      <button :disabled="pagination.current_page === pagination.last_page" @click="changePage(pagination.current_page + 1)">Next →</button>
+
+      <button :disabled="pagination.current_page === pagination.last_page"
+              @click="changePage(pagination.current_page + 1)">
+        Next →
+      </button>
     </div>
 
     <!-- Edit Modal -->
     <div v-if="showEditModal" class="modal-overlay" @click.self="closeEditModal">
       <div class="modal">
         <h3>Edit Product</h3>
+
         <form @submit.prevent="submitEdit">
-          <label>Name: <input v-model="editForm.name" required /></label>
-          <label>Price (₺): <input type="number" v-model.number="editForm.price" min="0" step="0.01" required /></label>
-          <label>Description: <textarea v-model="editForm.description"></textarea></label>
-          <label>Stock: <input type="number" v-model.number="editForm.stock" min="0" /></label>
-          <label>Category ID: <input type="number" v-model.number="editForm.category_id" min="1" /></label>
-          <label>Image: <input type="file" @change="handleImageUpload" accept="image/*" /></label>
+          <label>
+            Name
+            <input v-model="editForm.name" required />
+          </label>
+
+          <label>
+            Price
+            <input type="number" v-model.number="editForm.price" min="0" step="0.01" required />
+          </label>
+
+          <label>
+            Description
+            <textarea v-model="editForm.description"></textarea>
+          </label>
+
+          <label>
+            Stock
+            <input type="number" v-model.number="editForm.stock" min="0" required />
+          </label>
+
+          <label>
+            Category ID
+            <input type="number" v-model.number="editForm.category_id" min="1" required />
+          </label>
+
+          <label>
+            Image
+            <input type="file" accept="image/*" @change="handleImageUpload" />
+          </label>
 
           <div class="modal-actions">
-            <button type="submit" class="btn-save">💾 Save</button>
-            <button type="button" class="btn-cancel" @click="closeEditModal">❌ Cancel</button>
+            <button class="btn-save" type="submit">💾 Save</button>
+            <button class="btn-cancel" type="button" @click="closeEditModal">❌ Cancel</button>
           </div>
         </form>
       </div>
@@ -99,119 +133,152 @@ import axios from 'axios'
 
 export default {
   name: 'AdminManageProducts',
+
   data() {
     return {
       products: [],
       pagination: { current_page: 1, last_page: 1, per_page: 15, total: 0 },
       showEditModal: false,
-      editForm: { id: null, name: '', price: 0, description: '', stock: 0, category_id: null, image: null },
-      messages: {},            // Inline messages per product
-      deleteConfirmId: null,   // ID of product showing delete confirmation
+      deleteConfirmId: null,
+      messages: {},
+      editForm: {
+        id: null,
+        name: '',
+        price: 0,
+        description: '',
+        stock: 0,
+        category_id: null,
+        image: null
+      }
     }
   },
+
+  mounted() {
+    this.fetchProducts()
+  },
+
   methods: {
     formatPrice(price) {
-      return Number(price || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      return Number(price || 0).toLocaleString('tr-TR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })
     },
 
     async fetchProducts(page = 1) {
       try {
         const token = localStorage.getItem('token')
-        const res = await axios.get(`http://127.0.0.1:8000/api/admin/products?page=${page}`, {
-          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
-        })
-        this.products = res.data.data || []
-        this.pagination = {
-          current_page: res.data.current_page || 1,
-          last_page: res.data.last_page || 1,
-          per_page: res.data.per_page || 15,
-          total: res.data.total || 0
-        }
-      } catch (err) {
-        console.error('Failed to fetch products:', err)
+        const res = await axios.get(
+          `http://127.0.0.1:8000/api/admin/products?page=${page}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+
+        this.products = res.data.data
+        this.pagination = res.data
+      } catch {
         this.setMessage(null, 'Failed to load products.')
       }
     },
 
-    // Inline messages
     setMessage(id, text) {
       if (id) this.messages[id] = text
-      else this.messages['_general'] = text
+      else this.messages._general = text
+
       setTimeout(() => {
         if (id) delete this.messages[id]
-        else delete this.messages['_general']
+        else delete this.messages._general
       }, 4000)
     },
 
-    showDeleteConfirm(id) { this.deleteConfirmId = id },
-    cancelDelete() { this.deleteConfirmId = null },
-
-    async removeProduct(productId) {
-      try {
-        const token = localStorage.getItem('token')
-        await axios.delete(`http://127.0.0.1:8000/api/admin/products/${productId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        this.setMessage(productId, 'Product removed successfully.')
-        this.deleteConfirmId = null
-        await this.fetchProducts(this.pagination.current_page)
-      } catch (err) {
-        console.error('Failed to remove product:', err)
-        this.setMessage(productId, 'Failed to remove product.')
-        this.deleteConfirmId = null
+    openEditModal(product) {
+      this.editForm = {
+        id: product.id,
+        name: product.name,
+        price: Number(product.price),
+        description: product.description ?? '',
+        stock: Number(product.stock),
+        category_id: product.category_id,
+        image: null
       }
+      this.showEditModal = true
+    },
+
+    closeEditModal() {
+      this.showEditModal = false
+    },
+
+    handleImageUpload(e) {
+      this.editForm.image = e.target.files[0] || null
     },
 
     async submitEdit() {
       try {
         const token = localStorage.getItem('token')
         const formData = new FormData()
-        formData.append('name', this.editForm.name.trim())
+
+        formData.append('name', this.editForm.name)
         formData.append('price', this.editForm.price)
-        formData.append('description', this.editForm.description || '')
-        formData.append('quantity', this.editForm.stock) // API uses 'quantity'
-        if (this.editForm.category_id) formData.append('category_id', this.editForm.category_id)
-        if (this.editForm.image) formData.append('image', this.editForm.image)
+        formData.append('description', this.editForm.description)
+        formData.append('stock', this.editForm.stock)
+        formData.append('category_id', this.editForm.category_id)
+
+        if (this.editForm.image) {
+          formData.append('image', this.editForm.image)
+        }
 
         await axios.post(
           `http://127.0.0.1:8000/api/admin/products/${this.editForm.id}?_method=PUT`,
           formData,
-          { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } }
+          { headers: { Authorization: `Bearer ${token}` } }
         )
 
         this.setMessage(this.editForm.id, 'Product updated successfully.')
         this.closeEditModal()
-        await this.fetchProducts(this.pagination.current_page)
-      } catch (err) {
-        console.error('Failed to update product:', err)
-        this.setMessage(this.editForm.id, 'Failed to update product.')
+        this.fetchProducts(this.pagination.current_page)
+
+      } catch (error) {
+        alert(JSON.stringify(error.response?.data?.errors || error.message, null, 2))
       }
     },
 
-    openEditModal(product) {
-      this.editForm = {
-        id: product.id,
-        name: product.name || '',
-        price: product.price || 0,
-        description: product.description || '',
-        stock: product.quantity || 0,
-        category_id: product.category_id || null,
-        image: null
+    async removeProduct(id) {
+      try {
+        const token = localStorage.getItem('token')
+        await axios.delete(
+          `http://127.0.0.1:8000/api/admin/products/${id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+
+        this.setMessage(id, 'Product removed.')
+        this.deleteConfirmId = null
+        this.fetchProducts(this.pagination.current_page)
+
+      } catch {
+        this.setMessage(id, 'Failed to remove product.')
       }
-      this.showEditModal = true
-    },
-    closeEditModal() {
-      this.showEditModal = false
-      this.editForm = { id:null, name:'', price:0, description:'', stock:0, category_id:null, image:null }
     },
 
-    handleImageUpload(e) { this.editForm.image = e.target.files[0] || null },
-    changePage(page) { if(page>=1 && page<=this.pagination.last_page) this.fetchProducts(page) },
-    useFallbackImage(e) { e.target.src='https://via.placeholder.com/150?text=No+Image' }
-  },
-  mounted() { this.fetchProducts() }
+    showDeleteConfirm(id) {
+      this.deleteConfirmId = id
+    },
+
+    cancelDelete() {
+      this.deleteConfirmId = null
+    },
+
+    changePage(page) {
+      if (page >= 1 && page <= this.pagination.last_page) {
+        this.fetchProducts(page)
+      }
+    },
+
+    useFallbackImage(e) {
+      e.target.src = 'https://via.placeholder.com/150?text=No+Image'
+    }
+  }
 }
 </script>
+
 
 <style scoped>
 /* ===== Inline messages ===== */
@@ -527,5 +594,48 @@ export default {
     width: 90%;
     padding: 1rem;
   }
+}
+.product-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  min-height: 400px; /* ADD THIS */
+  align-items: start; /* ADD THIS - prevents stretching */
+}
+
+.product-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 4px 12px rgba(46, 125, 50, 0.08);
+  border: 1px solid #e8f5e8;
+  transition: transform 0.2s ease;
+  height: 100%; /* ADD THIS - makes all cards equal height */
+  display: flex; /* ADD THIS */
+  flex-direction: column; /* ADD THIS */
+}
+.card-header {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  flex-shrink: 0; /* ADD THIS - prevents shrinking */
+}
+
+.farmer-info {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background: #1e644d75;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  flex-shrink: 0; /* ADD THIS */
+}
+
+.card-footer {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: auto; /* ADD THIS - pushes footer to bottom */
+  flex-shrink: 0; /* ADD THIS */
 }
 </style>

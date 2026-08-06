@@ -71,19 +71,28 @@ class FeedbackController extends Controller
 }
 
 
-    // 3. Delete feedback (only if owner)
-    public function destroy($id)
-    {
-        $feedback = Feedback::findOrFail($id);
+// app/Http/Controllers/FeedbackController.php
+public function destroy(Request $request, $id)
+{
+    $feedback = Feedback::findOrFail($id);
+    $user = $request->user();
 
-        if ($feedback->user_id !== Auth::id()) {
-            return response()->json(['message' => 'Unauthorized.'], 403);
+    // Farmers can only delete feedback on their own products
+    if ($user->role === 'farmer') {
+        if ($feedback->product->user_id !== $user->id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
         }
-
-        $feedback->delete();
-
-        return response()->json(['message' => 'Feedback deleted.']);
+    } 
+    // Users can only delete their own feedback
+    else if ($feedback->user_id !== $user->id) {
+        return response()->json(['error' => 'Unauthorized'], 403);
     }
+
+    $feedback->delete();
+    return response()->json(['message' => 'Feedback deleted successfully']);
+}
+
+
 
     // 4. View approved feedback for a product
     public function productFeedback($productId)
